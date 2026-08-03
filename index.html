@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Siri AI</title>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #030508;
+            --user-bubble: linear-gradient(135deg, #0071e3 0%, #0a84ff 100%);
+            --ai-bubble-bg: rgba(255, 255, 255, 0.08);
+            --card-glass: rgba(255, 255, 255, 0.07);
+            --glass-border: rgba(255, 255, 255, 0.18);
+            --glass-highlight: rgba(255, 255, 255, 0.25);
+            --text-primary: #ffffff;
+            --text-secondary: #a1a1a6;
+            --search-bar-bg: rgba(255, 255, 255, 0.1);
+            --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+            --liquid-glow: linear-gradient(90deg, rgba(255,107,157,0.3), rgba(139,92,246,0.3), rgba(59,130,246,0.3), rgba(52,211,153,0.3));
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-family);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        /* Ambient Ambient Liquid Background Glow */
+        body::before {
+            content: "";
+            position: absolute;
+            top: -10%;
+            left: -10%;
+            width: 120%;
+            height: 120%;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(139, 92, 246, 0.18) 0%, transparent 45%),
+                radial-gradient(circle at 80% 80%, rgba(255, 107, 157, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(10, 132, 255, 0.12) 0%, transparent 60%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Fullscreen Container Layar HP Native */
+        .app-container {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: rgba(3, 5, 8, 0.85);
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        /* Refleksi Kaca Utama (Reflection Overlay) */
+        .glass-reflection {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-reflection::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50%;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 100%);
+            pointer-events: none;
+            border-top-left-radius: inherit;
+            border-top-right-radius: inherit;
+            z-index: 2;
+        }
+
+        /* Header Bar Liquid Glass */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: calc(12px + env(safe-area-inset-top, 20px)) 16px 12px 16px;
+            background: rgba(20, 24, 33, 0.65);
+            backdrop-filter: blur(30px) saturate(190%);
+            -webkit-backdrop-filter: blur(30px) saturate(190%);
+            border-bottom: 1px solid var(--glass-border);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+            z-index: 20;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        /* Apple Intelligence Liquid Mesh Line */
+        .header::after {
+            content: "";
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 1.5px;
+            background: var(--liquid-glow);
+            opacity: 0.8;
+            animation: liquidShift 6s infinite alternate ease-in-out;
+        }
+
+        @keyframes liquidShift {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.4px;
+            color: #ffffff;
+            text-shadow: 0 2px 10px rgba(255, 255, 255, 0.2);
+        }
+
+        .back-icon, .icon-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #0a84ff;
+            cursor: pointer;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: inset 0 1px 1px var(--glass-highlight);
+            transition: all 0.2s;
+        }
+
+        .icon-btn:active, .back-icon:active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        /* Area Chat Scrollable */
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            scroll-behavior: smooth;
+        }
+
+        .chat-area::-webkit-scrollbar {
+            display: none;
+        }
+
+        .message-row {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-row.user {
+            align-items: flex-end;
+        }
+
+        .message-row.ai {
+            align-items: flex-start;
+        }
+
+        /* Liquid Glass Bubbles */
+        .bubble {
+            max-width: 82%;
+            padding: 13px 17px;
+            border-radius: 22px;
+            font-size: 15px;
+            line-height: 1.42;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        .bubble.user {
+            background: var(--user-bubble);
+            color: #ffffff;
+            border-bottom-right-radius: 6px;
+            box-shadow: 0 4px 20px rgba(10, 132, 255, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .bubble.ai {
+            background: var(--ai-bubble-bg);
+            color: var(--text-primary);
+            border-bottom-left-radius: 6px;
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 1px var(--glass-highlight);
+        }
+
+        /* Grid Berita / Widget Liquid Glass */
+        .news-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 8px;
+            width: 100%;
+        }
+
+        .ios-card {
+            background: var(--card-glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            backdrop-filter: blur(25px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 1px var(--glass-highlight);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Kilauan Kaca Diagonal (Liquid Glass Sheen) */
+        .ios-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -50%;
+            width: 200%;
+            height: 100%;
+            background: linear-gradient(
+                115deg,
+                transparent 40%,
+                rgba(255, 255, 255, 0.12) 50%,
+                transparent 60%
+            );
+            pointer-events: none;
+        }
+
+        .card-time {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .card-heading {
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.25;
+            color: #ffffff;
+        }
+
+        .card-desc {
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.3;
+            margin-top: 2px;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* Indikator Mengetik Liquid Glass */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 12px 16px;
+            background: var(--ai-bubble-bg);
+            border-radius: 20px;
+            border-bottom-left-radius: 6px;
+            width: fit-content;
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(20px);
+            box-shadow: inset 0 1px 1px var(--glass-highlight);
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--text-secondary);
+            border-radius: 50%;
+            animation: pulseDot 1.4s infinite ease-in-out both;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes pulseDot {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Bottom Input Bar Liquid Glass */
+        .bottom-bar {
+            padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 12px)) 16px;
+            background: rgba(18, 22, 31, 0.75);
+            backdrop-filter: blur(35px) saturate(200%);
+            -webkit-backdrop-filter: blur(35px) saturate(200%);
+            border-top: 1px solid var(--glass-border);
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .input-pill {
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--glass-border);
+            border-radius: 28px;
+            padding: 6px 8px 6px 14px;
+            gap: 8px;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 1px var(--glass-highlight);
+            transition: all 0.3s ease;
+        }
+
+        .input-pill:focus-within {
+            border-color: rgba(10, 132, 255, 0.6);
+            background: rgba(255, 255, 255, 0.12);
+            box-shadow: 0 0 15px rgba(10, 132, 255, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+        }
+
+        .input-icon {
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-size: 15px;
+        }
+
+        .chat-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .action-icon {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 15px;
+            transition: transform 0.2s;
+        }
+
+        .action-icon.send-btn {
+            color: #0a84ff;
+        }
+
+        .action-icon.mic-btn.recording {
+            color: #ff453a;
+            animation: micPulse 1s infinite alternate;
+        }
+
+        @keyframes micPulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.15); }
+        }
+
+        /* Modal Settings Glass */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 120;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background: rgba(30, 35, 48, 0.85);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 22px;
+            width: 100%;
+            max-width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 1px 1px var(--glass-highlight);
+        }
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .form-input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 10px 12px;
+            color: white;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .modal-btn {
+            background: linear-gradient(135deg, #0071e3, #0a84ff);
+            color: white;
+            border: none;
+            padding: 11px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4);
+        }
+
+        .error-banner {
+            background: rgba(255, 69, 58, 0.25);
+            border: 1px solid rgba(255, 69, 58, 0.4);
+            color: #ff453a;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            margin-bottom: 8px;
+            display: none;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Header Bar Fullscreen Liquid Glass -->
+        <header class="header glass-reflection">
+            <div class="back-icon">
+                <i class="fa-solid fa-chevron-left"></i>
+            </div>
+            <div class="header-title">
+                <span>Siri AI</span>
+            </div>
+            <button class="icon-btn" id="openSettingsBtn" title="Pengaturan">
+                <i class="fa-solid fa-gear"></i>
+            </button>
+        </header>
+
+        <!-- Area Chat -->
+        <main class="chat-area" id="chatArea">
+            <!-- Greeting Awal AI -->
+            <div class="message-row ai">
+                <div class="bubble ai glass-reflection">
+                    Halo, Saya Siri AI dari adnan.120hz. Ada yang bisa saya bantu dengan Apple Intelligence hari ini?
+                </div>
+            </div>
+
+            <!-- Widget Informasi / Berita Style Liquid Glass -->
+            <div class="news-grid">
+                <div class="ios-card glass-reflection">
+                    <span class="card-time">Hari Ini</span>
+                    <span class="card-heading">Hotel Terbaik di Amalfi Coast</span>
+                    <span class="card-desc">Le Sirenuse dan Santa Caterina memiliki pemandangan tebing yang spektakuler.</span>
+                </div>
+                <div class="ios-card glass-reflection">
+                    <span class="card-time">Kemarin</span>
+                    <span class="card-heading">Kuliner Dekat Apple Park</span>
+                    <span class="card-desc">Rekomendasi restoran favorit lokal di Cupertino untuk Anda kunjungi.</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Input Bar Liquid Glass -->
+        <footer class="bottom-bar glass-reflection">
+            <div class="error-banner" id="errorBanner"></div>
+            <form class="input-pill" id="chatForm" onsubmit="return false;">
+                <i class="fa-solid fa-paperclip input-icon"></i>
+                <input type="text" class="chat-input" id="userInput" placeholder="Cari atau Tanya Siri..." autocomplete="off">
+                <button type="button" class="action-icon mic-btn" id="micBtn" title="Suara">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+                <button type="submit" class="action-icon send-btn" id="sendBtn" title="Kirim">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
+            </form>
+        </footer>
+
+        <!-- Modal Pengaturan API Key -->
+        <div class="modal-overlay" id="settingsModal">
+            <div class="modal-content glass-reflection">
+                <div class="modal-title">Pengaturan API Key</div>
+                <input type="password" class="form-input" id="apiKeyInput" placeholder="Masukkan Gemini API Key...">
+                <button class="modal-btn" id="saveApiKeyBtn">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Inisialisasi DOM
+        const chatArea = document.getElementById('chatArea');
+        const userInput = document.getElementById('userInput');
+        const chatForm = document.getElementById('chatForm');
+        const micBtn = document.getElementById('micBtn');
+        const openSettingsBtn = document.getElementById('openSettingsBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
+        const errorBanner = document.getElementById('errorBanner');
+
+        // State
+        let apiKey = localStorage.getItem('gemini_api_key') || '';
+        let isRecording = false;
+        let recognition = null;
+
+        if (apiKey) {
+            apiKeyInput.value = apiKey;
+        }
+
+        // Modal Handlers
+        openSettingsBtn.addEventListener('click', () => {
+            settingsModal.classList.add('active');
+        });
+
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) {
+                settingsModal.classList.remove('active');
+            }
+        });
+
+        saveApiKeyBtn.addEventListener('click', () => {
+            const keyVal = apiKeyInput.value.trim();
+            if (keyVal) {
+                apiKey = keyVal;
+                localStorage.setItem('gemini_api_key', apiKey);
+                hideError();
+                settingsModal.classList.remove('active');
+            } else {
+                showError('Masukkan API Key Gemini terlebih dahulu');
+            }
+        });
+
+        function showError(msg) {
+            errorBanner.innerText = msg;
+            errorBanner.style.display = 'block';
+            setTimeout(hideError, 4000);
+        }
+
+        function hideError() {
+            errorBanner.style.display = 'none';
+        }
+
+        // Tambah Bubble Chat
+        function appendBubble(sender, content) {
+            const row = document.createElement('div');
+            row.className = `message-row ${sender}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = `bubble ${sender} glass-reflection`;
+
+            if (sender === 'ai') {
+                let formatted = content
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/\n/g, '<br>');
+                bubble.innerHTML = formatted;
+            } else {
+                bubble.textContent = content;
+            }
+
+            row.appendChild(bubble);
+            chatArea.appendChild(row);
+            scrollToBottom();
+        }
+
+        function showTypingIndicator() {
+            const row = document.createElement('div');
+            row.className = 'message-row ai';
+            row.id = 'typingIndicator';
+
+            const indicator = document.createElement('div');
+            indicator.className = 'typing-indicator glass-reflection';
+            indicator.innerHTML = `
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            `;
+
+            row.appendChild(indicator);
+            chatArea.appendChild(row);
+            scrollToBottom();
+        }
+
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) {
+                indicator.remove();
+            }
+        }
+
+        function scrollToBottom() {
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        // Handle Kirim Pesan
+        async function handleSend() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            if (!apiKey) {
+                showError('Masukkan API Key Gemini terlebih dahulu');
+                settingsModal.classList.add('active');
+                return;
+            }
+
+            appendBubble('user', text);
+            userInput.value = '';
+            hideError();
+
+            showTypingIndicator();
+
+            try {
+                const responseText = await callGeminiAPI(text);
+                removeTypingIndicator();
+                appendBubble('ai', responseText);
+            } catch (err) {
+                removeTypingIndicator();
+                showError(err.message || 'Gagal terhubung ke API Key Gemini');
+            }
+        }
+
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            handleSend();
+        });
+
+        // Gemini API Request
+        async function callGeminiAPI(promptText) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [
+                    {
+                        parts: [{ text: promptText }]
+                    }
+                ],
+                systemInstruction: {
+                    parts: [
+                        { text: "Anda adalah Siri AI, asisten pintar berbasis Apple Intelligence buatan adnan.120hz. Jawablah selalu dalam bahasa Indonesia secara singkat, akurat, ringkas, dan elegan khas Apple iOS." }
+                    ]
+                }
+            };
+
+            const delays = [1000, 2000, 4000, 8000];
+            let lastError = null;
+
+            for (let i = 0; i <= delays.length; i++) {
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (res.status === 400 || res.status === 403) {
+                        throw new Error('API Key tidak valid');
+                    }
+
+                    if (!res.ok) {
+                        throw new Error(`Error Server (${res.status})`);
+                    }
+
+                    const data = await res.json();
+                    const aiMessage = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                    if (!aiMessage) {
+                        throw new Error('Tidak ada respon dari Gemini API.');
+                    }
+
+                    return aiMessage;
+                } catch (err) {
+                    lastError = err;
+                    if (err.message === 'API Key tidak valid') break;
+                    if (i < delays.length) {
+                        await new Promise(r => setTimeout(r, delays[i]));
+                    }
+                }
+            }
+
+            throw lastError || new Error('Gagal terhubung ke Gemini API.');
+        }
+
+        // Voice Input (Speech Recognition)
+        function setupVoiceRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            if (!SpeechRecognition) {
+                micBtn.addEventListener('click', () => {
+                    showError('Fitur suara tidak didukung di browser ini.');
+                });
+                return;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.lang = 'id-ID';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                micBtn.classList.add('recording');
+            };
+
+            recognition.onend = () => {
+                isRecording = false;
+                micBtn.classList.remove('recording');
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                if (transcript) {
+                    userInput.value = transcript;
+                    handleSend();
+                }
+            };
+
+            recognition.onerror = () => {
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                showError('Gagal merekam suara.');
+            };
+
+            micBtn.addEventListener('click', () => {
+                if (isRecording) {
+                    recognition.stop();
+                } else {
+                    recognition.start();
+                }
+            });
+        }
+
+        setupVoiceRecognition();
+    </script>
+</body>
+</html>
+
