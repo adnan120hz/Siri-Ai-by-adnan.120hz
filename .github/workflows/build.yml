@@ -1,0 +1,50 @@
+name: Build IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Archive (unsigned)
+        run: |
+          xcodebuild \
+            -project AiAdnan120hz/AiAdnan120hz.xcodeproj \
+            -target AiAdnan120hz \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$GITHUB_WORKSPACE/build/AiAdnan120hz.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH=$(ls -d "$GITHUB_WORKSPACE/build/AiAdnan120hz.xcarchive/Products/Applications/"*.app | head -1)
+          echo "App: $APP_PATH"
+          mkdir -p "$GITHUB_WORKSPACE/ipa/Payload"
+          cp -R "$APP_PATH" "$GITHUB_WORKSPACE/ipa/Payload/"
+          cd "$GITHUB_WORKSPACE/ipa"
+          zip -qry "$GITHUB_WORKSPACE/AiAdnan120hz-unsigned.ipa" Payload
+          ls -lh "$GITHUB_WORKSPACE/AiAdnan120hz-unsigned.ipa"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AiAdnan120hz-unsigned.ipa
+          path: AiAdnan120hz-unsigned.ipa
+          if-no-files-found: error
