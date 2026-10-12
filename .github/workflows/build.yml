@@ -24,7 +24,7 @@ jobs:
         run: |
           xcodebuild \
             -project AiAdnan120hz/AiAdnan120hz.xcodeproj \
-            -target AiAdnan120hz \
+            -scheme AiAdnan120hz \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$GITHUB_WORKSPACE/build/AiAdnan120hz.xcarchive" \
