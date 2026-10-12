@@ -47,7 +47,7 @@ enum MediaService {
             let fraction = Double(i + 1) / Double(count + 1)
             let time = CMTime(seconds: duration.seconds * fraction, preferredTimescale: 600)
             do {
-                let cg = try await generator.image(for: time)
+                let cg = try await generator.image(at: time)
                 let out = NSMutableData()
                 if let dest = CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil) {
                     CGImageDestinationAddImage(dest, cg, [kCGImageDestinationLossyCompressionQuality as String: 0.7] as CFDictionary)

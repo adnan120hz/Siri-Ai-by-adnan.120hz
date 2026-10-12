@@ -50,7 +50,7 @@ struct VoiceModeView: View {
                 } label: {
                     Image(systemName: speech.isRecording ? "stop.circle.fill" : "mic.circle.fill")
                         .font(.system(size: 72))
-                        .foregroundStyle(speech.isRecording ? .red : .accentColor)
+                        .foregroundStyle(speech.isRecording ? Color.red : Color.accentColor)
                 }
 
                 Button("Kirim ke AI") { Task { @MainActor in sendVoice() } }
@@ -92,15 +92,13 @@ struct VoiceModeView: View {
         viewModel.send(conversation: conversation, text: text, imageDatas: [],
                        note: "via Mode Suara", context: context, appState: appState)
         Task {
-            while await MainActor.run({ viewModel.isSending }) {
+            // Task ini mewarisi @MainActor dari sendVoice(), jadi akses langsung aman.
+            while viewModel.isSending {
                 try? await Task.sleep(nanoseconds: 400_000_000)
             }
-            let reply = await MainActor.run {
-                conversation.messages.sorted { $0.createdAt < $1.createdAt }
-                    .last(where: { $0.role == "assistant" && !$0.text.isEmpty })
-            }
-            if let reply {
-                await MainActor.run { speech.speak(reply.text) }
+            if let reply = conversation.messages.sorted(by: { $0.createdAt < $1.createdAt })
+                .last(where: { $0.role == "assistant" && !$0.text.isEmpty }) {
+                speech.speak(reply.text)
             }
         }
     }

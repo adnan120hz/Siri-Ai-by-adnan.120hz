@@ -128,7 +128,7 @@ struct SettingsView: View {
                 Text(title).foregroundStyle(.primary)
                 Spacer()
                 if altIconName == name {
-                    Image(systemName: "checkmark").foregroundStyle(.accentColor)
+                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
                 }
             }
         }
