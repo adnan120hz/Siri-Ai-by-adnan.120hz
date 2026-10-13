@@ -95,7 +95,7 @@ struct SettingsView: View {
                     Text("Ingatan 100% lokal di HP ini (bukan cloud). AI merangkum obrolan dan menyimpan fakta tentangmu untuk dipakai di prompt berikutnya.")
                         .font(.footnote).foregroundStyle(.secondary)
                     if !facts.isEmpty {
-                        NavigationLink("Lihat ingatan (\(facts.count))") {
+                        NavigationLink {
                             List {
                                 ForEach(facts) { f in
                                     VStack(alignment: .leading) {
@@ -109,6 +109,8 @@ struct SettingsView: View {
                                 }
                             }
                             .navigationTitle("Ingatan AI")
+                        } label: {
+                            Text("Lihat ingatan (\(facts.count))")
                         }
                     }
                     Button("Hapus semua ingatan", role: .destructive) {
