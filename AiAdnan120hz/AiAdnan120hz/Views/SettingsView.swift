@@ -116,8 +116,6 @@ struct SettingsView: View {
                         try? context.save()
                     }
                     .disabled(facts.isEmpty)
-                } header: {
-                    Text("Ingatan")
                 }
 
                 Section(header: Text("Penyimpanan lokal")) {
