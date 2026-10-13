@@ -7,6 +7,7 @@ struct APIKeyView: View {
     @State private var keyInput = ""
     @State private var message: String?
     @State private var isError = false
+    @State private var isValidating = false
 
     var body: some View {
         NavigationStack {
@@ -25,8 +26,8 @@ struct APIKeyView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
 
-                    Button("Simpan Key") { Task { @MainActor in save() } }
-                        .disabled(keyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button(isValidating ? "Memeriksa…" : "Simpan Key") { Task { @MainActor in save() } }
+                        .disabled(keyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isValidating)
                 }
 
                 if appState.hasAPIKey {
@@ -62,14 +63,53 @@ struct APIKeyView: View {
     @MainActor
     private func save() {
         let key = keyInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        if KeychainStore.save(key) {
-            keyInput = ""
-            appState.refreshKeyStatus()
-            message = "Key tersimpan di Keychain."
-            isError = false
-        } else {
+        guard !key.isEmpty else { return }
+        // Simpan dulu ke Keychain, lalu VALIDASI ke server: kalau key salah /
+        // revoked, user langsung tahu alasannya saat ini juga — bukan pas chat.
+        guard KeychainStore.save(key) else {
             message = "Gagal menyimpan ke Keychain."
             isError = true
+            return
+        }
+        keyInput = ""
+        appState.refreshKeyStatus()
+        isValidating = true
+        message = "Key tersimpan. Memeriksa ke server…"
+        isError = false
+        Task { @MainActor in
+            do {
+                let models = try await APInexClient.fetchModels(apiKey: key)
+                // Deteksi tier: probe model paid termurah.
+                var tier = APInexClient.AccountTier.unknown
+                if let paid = models.first(where: { !APInexClient.isFreeModel($0) }) {
+                    tier = (try? await APInexClient.detectTier(apiKey: key, paidModelId: paid)) ?? .unknown
+                } else {
+                    // Tidak ada model paid di daftar → anggap free.
+                    tier = .free
+                }
+                await MainActor.run {
+                    appState.availableModels = models
+                    appState.accountTier = tier
+                    // Model bawaan lama bisa jadi tidak ada di akun key baru,
+                    // atau model paid yang sekarang ke-lock → reset.
+                    let cur = appState.defaultModelId
+                    let curLocked = tier == .free && !cur.isEmpty && !APInexClient.isFreeModel(cur)
+                    if !models.contains(cur) || curLocked {
+                        appState.defaultModelId = models.first(where: { APInexClient.isFreeModel($0) }) ?? models.first ?? ""
+                    }
+                    let tierText = tier == .paid ? "Paid" : tier == .free ? "Free" : "?"
+                    message = "Key valid (\(tierText)) — \(models.count) model tersedia."
+                    isError = false
+                    isValidating = false
+                }
+            } catch {
+                await MainActor.run {
+                    let desc = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    message = "Key tersimpan, tapi server menolak: \(desc)"
+                    isError = true
+                    isValidating = false
+                }
+            }
         }
     }
 
@@ -78,6 +118,8 @@ struct APIKeyView: View {
         if KeychainStore.remove() {
             appState.refreshKeyStatus()
             appState.availableModels = []
+            appState.defaultModelId = ""
+            appState.accountTier = .unknown
             message = "Key dihapus."
             isError = false
         } else {

@@ -99,6 +99,25 @@ final class MemoryFact {
     }
 }
 
+// MARK: - Source web tersimpan (untuk "Source Web": URL → teks referensi AI)
+
+@Model
+final class WebSource {
+    @Attribute(.unique) var id: UUID
+    var url: String
+    var title: String
+    var extractedText: String
+    var createdAt: Date
+
+    init(url: String, title: String, extractedText: String) {
+        self.id = UUID()
+        self.url = url
+        self.title = title
+        self.extractedText = extractedText
+        self.createdAt = Date()
+    }
+}
+
 // MARK: - State global aplikasi
 
 @MainActor
@@ -108,8 +127,28 @@ final class AppState: ObservableObject {
     @Published var availableModels: [String] = []
     @Published var modelsError: String?
 
-    @AppStorage("defaultModelId") var defaultModelId: String = ""
-    @AppStorage("memoryEnabled") var memoryEnabled: Bool = true
+    // @AppStorage tidak memicu objectWillChange di dalam ObservableObject
+    // (UI tidak refresh) → pakai @Published + tulis UserDefaults manual.
+    @Published var defaultModelId: String = UserDefaults.standard.string(forKey: "defaultModelId") ?? "" {
+        didSet { UserDefaults.standard.set(defaultModelId, forKey: "defaultModelId") }
+    }
+    @Published var memoryEnabled: Bool = UserDefaults.standard.object(forKey: "memoryEnabled") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(memoryEnabled, forKey: "memoryEnabled") }
+    }
+    /// "system" | "dark" | "light"
+    @Published var appearanceMode: String = UserDefaults.standard.string(forKey: "appearanceMode") ?? "dark" {
+        didSet { UserDefaults.standard.set(appearanceMode, forKey: "appearanceMode") }
+    }
+    /// Tier akun APInex: "unknown" | "free" | "paid"
+    @Published var accountTier: APInexClient.AccountTier = .unknown {
+        didSet { UserDefaults.standard.set(accountTier.rawValue, forKey: "accountTier") }
+    }
+
+    init() {
+        let raw = UserDefaults.standard.string(forKey: "accountTier") ?? "unknown"
+        accountTier = APInexClient.AccountTier(rawValue: raw) ?? .unknown
+        refreshKeyStatus()
+    }
 
     func refreshKeyStatus() {
         if let key = KeychainStore.load(), !key.isEmpty {

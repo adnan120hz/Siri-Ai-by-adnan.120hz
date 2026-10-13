@@ -19,6 +19,7 @@ struct ChatView: View {
     @State private var pendingMedia: [PendingMedia] = []
     @State private var showMediaPicker = false
     @State private var showDocPicker = false
+    @State private var showWebSource = false
     @State private var showVoice = false
     @State private var alertText: String?
     @State private var storageWarning: String?
@@ -126,6 +127,9 @@ struct ChatView: View {
                     Button { showDocPicker = true } label: {
                         Label("Import Source (txt/md/pdf)", systemImage: "doc.badge.plus")
                     }
+                    Button { showWebSource = true } label: {
+                        Label("Source Web (URL)", systemImage: "globe")
+                    }
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
@@ -157,15 +161,17 @@ struct ChatView: View {
                         Text("Belum ada daftar model")
                     } else {
                         ForEach(appState.availableModels, id: \.self) { m in
+                            let locked = appState.accountTier == .free && !APInexClient.isFreeModel(m)
                             Button {
                                 conversation.modelId = m
                                 try? context.save()
                             } label: {
                                 HStack {
-                                    Text(m)
+                                    Text(m + (locked ? " · Paid" : ""))
                                     if m == conversation.modelId { Image(systemName: "checkmark") }
                                 }
                             }
+                            .disabled(locked)
                         }
                     }
                     Divider()
@@ -185,6 +191,9 @@ struct ChatView: View {
         }
         .sheet(isPresented: $showDocPicker) {
             DocumentPicker { importSource(from: $0) }
+        }
+        .sheet(isPresented: $showWebSource) {
+            WebSourceView(conversation: conversation)
         }
         .sheet(isPresented: $showVoice) {
             VoiceModeView(conversation: conversation)
@@ -226,7 +235,7 @@ struct ChatView: View {
             alertText = APIError.noKey.localizedDescription
             return
         }
-        Task {
+        Task { @MainActor in
             do {
                 let models = try await APInexClient.fetchModels(apiKey: key)
                 await MainActor.run {
@@ -264,7 +273,7 @@ struct ChatView: View {
                     let tmp = FileManager.default.temporaryDirectory
                         .appendingPathComponent(UUID().uuidString + ".mov")
                     try? FileManager.default.copyItem(at: url, to: tmp)
-                    Task {
+                    Task { @MainActor in
                         let frames = await MediaService.extractFrames(from: tmp)
                         await MainActor.run {
                             for f in frames {
@@ -330,30 +339,41 @@ struct MessageRow: View {
                     }
                 }
             } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    if let err = message.errorText, !err.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Label("Gagal", systemImage: "exclamationmark.triangle")
-                                .font(.subheadline).foregroundStyle(.red)
-                            Text(err)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                                .textSelection(.enabled)
-                            Button("Coba lagi") { onRetry() }
-                                .font(.subheadline)
+                HStack {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let err = message.errorText, !err.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Label("Gagal", systemImage: "exclamationmark.triangle")
+                                    .font(.subheadline).foregroundStyle(.red)
+                                Text(err)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .textSelection(.enabled)
+                                Button("Coba lagi") { onRetry() }
+                                    .font(.subheadline)
+                            }
+                            .padding(12)
+                            .background(Color.red.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                        } else {
+                            let shown = (isStreaming && !streamingText.isEmpty) ? streamingText : message.text
+                            if isStreaming && shown.isEmpty {
+                                // Indikator mengetik: AI sedang "berpikir", jangan terkesan instan.
+                                TypingIndicator()
+                                    .padding(12)
+                                    .background(Color.secondary.opacity(0.15))
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            } else {
+                                Text(shown)
+                                    .textSelection(.enabled)
+                                    .padding(12)
+                                    .background(Color.secondary.opacity(0.15))
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            }
                         }
-                        .padding(10)
-                        .background(Color.red.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                    } else {
-                        let shown = (isStreaming && !streamingText.isEmpty) ? streamingText : message.text
-                        Text(shown.isEmpty && isStreaming ? "…" : shown)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    Spacer(minLength: 40)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.trailing, 40)
             }
         }
         .contextMenu {
@@ -377,6 +397,27 @@ struct MessageRow: View {
                     }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Indikator "AI sedang mengetik": 3 titik berdenyut.
+
+struct TypingIndicator: View {
+    @State private var phase = 0
+    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<3) { i in
+                Circle()
+                    .fill(Color.secondary)
+                    .frame(width: 8, height: 8)
+                    .opacity(phase == i ? 1.0 : 0.3)
+            }
+        }
+        .onReceive(timer) { _ in
+            phase = (phase + 1) % 3
         }
     }
 }

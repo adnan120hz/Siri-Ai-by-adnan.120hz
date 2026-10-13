@@ -31,15 +31,19 @@ enum APIError: LocalizedError {
 struct APInexClient {
     static let baseURL = URL(string: "https://api.apinex.bond/v1")!
 
+    /// User-Agent browser-like: beberapa gateway/WAF menolak request tanpa UA.
+    static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+
     // --- /models ---
 
     struct ModelItem: Decodable { var id: String }
-    struct ModelList: Decodable { var data: [ModelItem] }
+    struct ModelList: Decodable { var data: [ModelItem]? }
 
     static func fetchModels(apiKey: String) async throws -> [String] {
         var req = URLRequest(url: baseURL.appendingPathComponent("models"))
         req.httpMethod = "GET"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 30
         let (data, response): (Data, URLResponse)
         do {
@@ -53,7 +57,7 @@ struct APInexClient {
         }
         do {
             let list = try JSONDecoder().decode(ModelList.self, from: data)
-            return list.data.map(\.id).sorted()
+            return (list.data ?? []).map(\.id).sorted()
         } catch {
             throw APIError.decoding(error.localizedDescription)
         }
@@ -65,12 +69,27 @@ struct APInexClient {
         var model: String
         var messages: [APIMessage]
         var max_tokens: Int
+        var temperature: Double
         var stream: Bool?
     }
 
     struct APIMessage: Encodable {
         var role: String
         var content: MessageContent
+
+        /// Teks kasar untuk estimasi token (tidak dikirim ke server).
+        var debugText: String {
+            switch content {
+            case .text(let t): return t
+            case .parts(let ps):
+                return ps.map {
+                    switch $0 {
+                    case .text(let t): return t
+                    case .image: return "[gambar]"
+                    }
+                }.joined(separator: " ")
+            }
+        }
     }
 
     enum MessageContent: Encodable {
@@ -130,15 +149,151 @@ struct APInexClient {
         var error: Detail?
     }
 
+    // MARK: - Audio: STT (/audio/transcriptions) & TTS (/audio/speech)
+
+    /// Model default OpenAI-compatible. Kalau APInex memakai ID lain,
+    /// server akan mengembalikan error yang jelas di UI.
+    static let sttModel = "whisper-1"
+    static let ttsModel = "tts-1"
+
+    struct TranscriptionResponse: Decodable { var text: String? }
+
+    /// STT via API: upload file audio (multipart) → teks.
+    static func transcribeAudio(apiKey: String, audioURL: URL, language: String) async throws -> String {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var req = URLRequest(url: baseURL.appendingPathComponent("audio/transcriptions"))
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.timeoutInterval = 120
+
+        let audioData = try Data(contentsOf: audioURL)
+        var body = Data()
+        func field(_ name: String, _ value: String) {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
+        field("model", sttModel)
+        field("language", language)
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
+        body.append(audioData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        req.httpBody = body
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: req)
+        } catch let e as URLError {
+            throw APIError.network(e)
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard status == 200 else {
+            throw APIError.http(status: status, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        do {
+            let decoded = try JSONDecoder().decode(TranscriptionResponse.self, from: data)
+            guard let text = decoded.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+                throw APIError.emptyReply
+            }
+            TokenUsage.record(tokens: TokenUsage.estimateTokens(for: text) + 50)
+            return text
+        } catch let e as APIError {
+            throw e
+        } catch {
+            throw APIError.decoding(error.localizedDescription)
+        }
+    }
+
+    struct SpeechRequest: Encodable {
+        var model: String
+        var input: String
+        var voice: String
+        var speed: Double
+        var instructions: String?
+    }
+
+    /// TTS via API: teks → byte audio (mp3/wav, tergantung server).
+    static func synthesizeSpeech(apiKey: String, text: String, voice: String,
+                                 speed: Double, style: String?) async throws -> Data {
+        var req = URLRequest(url: baseURL.appendingPathComponent("audio/speech"))
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        req.timeoutInterval = 120
+        let body = SpeechRequest(model: ttsModel, input: text, voice: voice,
+                                 speed: speed, instructions: style)
+        req.httpBody = try? JSONEncoder().encode(body)
+
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: req)
+        } catch let e as URLError {
+            throw APIError.network(e)
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard status == 200, !data.isEmpty else {
+            throw APIError.http(status: status, body: String(data: data, encoding: .utf8) ?? "")
+        }
+        TokenUsage.record(tokens: TokenUsage.estimateTokens(for: text))
+        return data
+    }
+
+    // MARK: - Tier akun (free / paid)
+    enum AccountTier: String {
+        case unknown, free, paid
+    }
+
+    /// Model dengan prefix "free/" = model gratis. Selain itu = paid.
+    static func isFreeModel(_ id: String) -> Bool {
+        id.lowercased().hasPrefix("free/")
+    }
+
+    /// Deteksi tier dengan probe murah: panggil model paid dengan max_tokens=1.
+    /// - 200 → paid (boleh pakai semua model)
+    /// - 402/403 → free tier (model paid diblokir)
+    /// - 401 → key tidak valid (throw)
+    /// - lainnya → unknown (jangan blokir, jangan berasumsi)
+    static func detectTier(apiKey: String, paidModelId: String) async throws -> AccountTier {
+        var req = URLRequest(url: baseURL.appendingPathComponent("chat/completions"))
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        req.timeoutInterval = 30
+        let body = Request(model: paidModelId,
+                           messages: [APIMessage(role: "user", content: .text("hi"))],
+                           max_tokens: 1, temperature: 0, stream: nil)
+        req.httpBody = try? JSONEncoder().encode(body)
+        let (_, response): (Data, URLResponse)
+        do {
+            (_, response) = try await URLSession.shared.data(for: req)
+        } catch let e as URLError {
+            throw APIError.network(e)
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        switch status {
+        case 200: return .paid
+        case 402, 403: return .free
+        case 401: throw APIError.http(status: status, body: "API key tidak valid.")
+        default: return .unknown
+        }
+    }
+
     private static func makeRequest(apiKey: String, model: String,
                                    messages: [APIMessage], stream: Bool) -> URLRequest {
         var req = URLRequest(url: baseURL.appendingPathComponent("chat/completions"))
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 120
         let body = Request(model: model, messages: messages,
-                           max_tokens: 2048, stream: stream ? true : nil)
+                           max_tokens: 2048, temperature: 0.7, stream: stream ? true : nil)
         req.httpBody = try? JSONEncoder().encode(body)
         return req
     }

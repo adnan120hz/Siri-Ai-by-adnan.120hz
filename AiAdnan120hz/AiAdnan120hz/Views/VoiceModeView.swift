@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - Mode Suara: tahan tombol mic → bicara → kirim → jawaban dibacakan.
+// MARK: - Mode Suara ala Siri: orb besar di tengah, tahan/ketuk mic untuk bicara.
 // Label jujur: loop STT → AI → TTS, bukan realtime duplex.
 
 struct VoiceModeView: View {
@@ -12,76 +12,96 @@ struct VoiceModeView: View {
     @StateObject private var speech = SpeechService()
     @StateObject private var viewModel = ChatViewModel()
     @State private var permissionDenied = false
+    @State private var showVoiceSettings = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                VStack(spacing: 6) {
-                    Text("Mode Suara")
-                        .font(.title2).bold()
-                    Text("STT → AI → TTS (bukan realtime duplex)")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
-                .padding(.top)
-
-                ScrollView {
-                    Text(speech.transcript.isEmpty ? "Tahan tombol mic, lalu bicara…" : speech.transcript)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(Color.secondary.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                }
-                .frame(maxHeight: 220)
-
-                if let status = speech.statusMessage {
-                    Text(status).font(.footnote).foregroundStyle(.red)
-                }
-                if permissionDenied {
-                    Text("Izin mic / speech recognition ditolak. Aktifkan di Pengaturan iPhone → Privasi.")
-                        .font(.footnote).foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                }
-
-                Button {
-                    Task { @MainActor in
-                        if speech.isRecording { speech.stopRecording() }
-                        else { speech.startRecording() }
+            ZStack {
+                SiriBackground()
+                VStack(spacing: 16) {
+                    // Orb — membesar saat merekam
+                    Button {
+                        Task { @MainActor in toggleRecord() }
+                    } label: {
+                        SiriOrbView(size: speech.isRecording ? 240 : 200)
+                            .animation(.easeInOut(duration: 0.3), value: speech.isRecording)
                     }
-                } label: {
-                    Image(systemName: speech.isRecording ? "stop.circle.fill" : "mic.circle.fill")
-                        .font(.system(size: 72))
-                        .foregroundStyle(speech.isRecording ? Color.red : Color.accentColor)
-                }
+                    .buttonStyle(.plain)
+                    .padding(.top, 8)
 
-                Button("Kirim ke AI") { Task { @MainActor in sendVoice() } }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isSending)
+                    Text(speech.isRecording ? "Mendengarkan…" : "Ketuk orb untuk bicara")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
 
-                if viewModel.isSending {
-                    ProgressView("AI menjawab…")
-                }
-                if speech.isSpeaking {
-                    Button("Berhenti bicara") { Task { @MainActor in speech.stopSpeaking() } }
-                        .font(.subheadline)
-                }
+                    ScrollView {
+                        Text(speech.transcript.isEmpty ? "" : speech.transcript)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(Color.secondary.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .frame(maxHeight: 140)
 
-                Spacer()
+                    if let status = speech.statusMessage {
+                        Text(status).font(.footnote).foregroundStyle(.red)
+                    }
+                    if permissionDenied {
+                        Text("Izin mic ditolak. Aktifkan di Pengaturan iPhone → Privasi → Mikrofon.")
+                            .font(.footnote).foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                    }
+                    if speech.isTranscribing {
+                        ProgressView("Mengubah suara jadi teks…")
+                    }
+
+                    Button("Kirim ke AI") { Task { @MainActor in sendVoice() } }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isSending)
+
+                    if viewModel.isSending {
+                        ProgressView("AI menjawab…")
+                    }
+                    if speech.isSpeaking {
+                        Button("Berhenti bicara") { Task { @MainActor in speech.stopSpeaking() } }
+                            .font(.subheadline)
+                    }
+
+                    Spacer()
+                }
+                .padding()
             }
-            .padding()
+            .navigationTitle("Mode Suara")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Tutup") { Task { @MainActor in close() } }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showVoiceSettings = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .accessibilityLabel("Kustomisasi suara")
+                }
+            }
+            .sheet(isPresented: $showVoiceSettings) {
+                NavigationStack { SiriVoiceSettingsView() }
             }
         }
         .onAppear {
-            Task {
+            Task { @MainActor in
                 let ok = await speech.requestPermissions()
                 if !ok { permissionDenied = true }
             }
         }
         .onDisappear { Task { @MainActor in close() } }
+    }
+
+    @MainActor
+    private func toggleRecord() {
+        if speech.isRecording { speech.stopRecording() }
+        else { speech.startRecording() }
     }
 
     @MainActor
@@ -91,8 +111,7 @@ struct VoiceModeView: View {
         speech.transcript = ""
         viewModel.send(conversation: conversation, text: text, imageDatas: [],
                        note: "via Mode Suara", context: context, appState: appState)
-        Task {
-            // Task ini mewarisi @MainActor dari sendVoice(), jadi akses langsung aman.
+        Task { @MainActor in
             while viewModel.isSending {
                 try? await Task.sleep(nanoseconds: 400_000_000)
             }

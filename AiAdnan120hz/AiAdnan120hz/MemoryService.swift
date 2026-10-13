@@ -42,6 +42,7 @@ enum MemoryService {
         let msg = APInexClient.APIMessage(role: "user", content: .text(prompt))
         do {
             let raw = try await APInexClient.sendChat(apiKey: apiKey, model: model, messages: [msg])
+            TokenUsage.record(tokens: TokenUsage.estimateTokens(for: prompt) + TokenUsage.estimateTokens(for: raw))
             guard let data = raw.data(using: .utf8),
                   let facts = try? JSONDecoder().decode([String].self, from: data),
                   !facts.isEmpty else { return }
@@ -68,6 +69,7 @@ enum MemoryService {
         let msg = APInexClient.APIMessage(role: "user", content: .text(prompt))
         do {
             let summary = try await APInexClient.sendChat(apiKey: apiKey, model: model, messages: [msg])
+            TokenUsage.record(tokens: TokenUsage.estimateTokens(for: prompt) + TokenUsage.estimateTokens(for: summary))
             conversation.summary = summary
             try? context.save()
         } catch { /* diam */ }

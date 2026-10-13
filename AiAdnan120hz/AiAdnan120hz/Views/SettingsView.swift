@@ -28,13 +28,33 @@ struct SettingsView: View {
                 }
 
                 Section("Model") {
+                    HStack {
+                        Text("Akun:")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Text(appState.accountTier == .paid ? "Paid account" : appState.accountTier == .free ? "Free account" : "Belum terdeteksi")
+                            .font(.subheadline).bold()
+                            .foregroundStyle(appState.accountTier == .paid ? .green : appState.accountTier == .free ? .orange : .secondary)
+                        Spacer()
+                        if appState.accountTier == .free {
+                            Text("Model paid terkunci")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     if appState.availableModels.isEmpty {
                         Text("Daftar model kosong. Muat ulang untuk mengambil dari apinex.bond.")
                             .font(.footnote).foregroundStyle(.secondary)
                     } else {
                         Picker("Model bawaan", selection: $appState.defaultModelId) {
                             ForEach(appState.availableModels, id: \.self) { m in
-                                Text(m).tag(m)
+                                let locked = appState.accountTier == .free && !APInexClient.isFreeModel(m)
+                                HStack {
+                                    Text(m)
+                                    if locked {
+                                        Text("· Paid").foregroundStyle(.secondary)
+                                    }
+                                }
+                                .tag(m)
+                                .disabled(locked)
                             }
                         }
                     }
@@ -47,7 +67,30 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Tampilan") {
+                    Picker("Mode", selection: $appState.appearanceMode) {
+                        Text("Sistem").tag("system")
+                        Text("Gelap").tag("dark")
+                        Text("Terang").tag("light")
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                Section("Kuota Token") {
+                    TokenUsageView()
+                }
+
                 Section {
+                    NavigationLink {
+                        ConnectivityView()
+                    } label: {
+                        Label("Konektivitas", systemImage: "link")
+                    }
+                    Text("Hubungkan GitHub (akses repo sebagai source) dan simpan link media sosial.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+
+                Section("Ingatan") {
                     Toggle("Ingatan AI", isOn: $appState.memoryEnabled)
                     Text("Ingatan 100% lokal di HP ini (bukan cloud). AI merangkum obrolan dan menyimpan fakta tentangmu untuk dipakai di prompt berikutnya.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -96,7 +139,7 @@ struct SettingsView: View {
                 }
 
                 Section("Tentang") {
-                    Text("Ai Adnan.120hz 1.0 — chat AI lewat API key apinex.bond milikmu. Tanpa akun, tanpa login.")
+                    Text("Siri Ai 1.0 — chat AI lewat API key apinex.bond milikmu. Tanpa akun, tanpa login.")
                         .font(.footnote).foregroundStyle(.secondary)
                     Text("Mode Suara = loop STT → AI → TTS on-device, bukan realtime duplex.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -151,7 +194,7 @@ struct SettingsView: View {
         }
         loadingModels = true
         modelsMessage = nil
-        Task {
+        Task { @MainActor in
             do {
                 let models = try await APInexClient.fetchModels(apiKey: key)
                 await MainActor.run {

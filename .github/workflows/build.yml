@@ -27,24 +27,24 @@ jobs:
             -scheme AiAdnan120hz \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$GITHUB_WORKSPACE/build/AiAdnan120hz.xcarchive" \
+            -archivePath "$GITHUB_WORKSPACE/build/SiriAi.xcarchive" \
             archive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
       - name: Package unsigned IPA
         run: |
-          APP_PATH=$(ls -d "$GITHUB_WORKSPACE/build/AiAdnan120hz.xcarchive/Products/Applications/"*.app | head -1)
+          APP_PATH=$(ls -d "$GITHUB_WORKSPACE/build/SiriAi.xcarchive/Products/Applications/"*.app | head -1)
           echo "App: $APP_PATH"
           mkdir -p "$GITHUB_WORKSPACE/ipa/Payload"
           cp -R "$APP_PATH" "$GITHUB_WORKSPACE/ipa/Payload/"
           cd "$GITHUB_WORKSPACE/ipa"
-          zip -qry "$GITHUB_WORKSPACE/AiAdnan120hz-unsigned.ipa" Payload
-          ls -lh "$GITHUB_WORKSPACE/AiAdnan120hz-unsigned.ipa"
+          zip -qry "$GITHUB_WORKSPACE/SiriAi-unsigned.ipa" Payload
+          ls -lh "$GITHUB_WORKSPACE/SiriAi-unsigned.ipa"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AiAdnan120hz-unsigned.ipa
-          path: AiAdnan120hz-unsigned.ipa
+          name: SiriAi-unsigned.ipa
+          path: SiriAi-unsigned.ipa
           if-no-files-found: error

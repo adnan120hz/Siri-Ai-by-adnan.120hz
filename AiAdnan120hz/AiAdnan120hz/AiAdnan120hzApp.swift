@@ -16,6 +16,7 @@ struct AiAdnan120hzApp: App {
             ImageAttachment.self,
             SourceAttachment.self,
             MemoryFact.self,
+            WebSource.self,
         ])
     }
 }

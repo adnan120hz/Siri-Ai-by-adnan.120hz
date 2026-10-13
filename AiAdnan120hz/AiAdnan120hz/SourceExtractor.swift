@@ -40,4 +40,56 @@ enum SourceExtractor {
         guard text.count <= maxChars * 4 else { throw ExtractError.tooLarge }
         return String(text.prefix(maxChars))
     }
+
+    // MARK: - Fetch URL web → teks polos (untuk "Source Web")
+
+    enum FetchError: LocalizedError {
+        case badURL
+        case http(Int)
+        case empty
+
+        var errorDescription: String? {
+            switch self {
+            case .badURL: return "URL tidak valid."
+            case .http(let s): return "Gagal fetch (HTTP \(s))."
+            case .empty: return "Halaman kosong / tidak ada teks."
+            }
+        }
+    }
+
+    /// Ambil URL (mis. GitHub repo, docs, artikel) → teks bersih.
+    static func fetchWebText(from urlString: String) async throws -> (title: String, text: String) {
+        var s = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !s.lowercased().hasPrefix("http") { s = "https://" + s }
+        guard let url = URL(string: s) else { throw FetchError.badURL }
+        var req = URLRequest(url: url)
+        req.timeoutInterval = 30
+        req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard status == 200 else { throw FetchError.http(status) }
+        guard var html = String(data: data, encoding: .utf8), !html.isEmpty else {
+            throw FetchError.empty
+        }
+        // Judul halaman
+        var title = url.host ?? s
+        if let r = html.range(of: "<title[^>]*>(.*?)</title>", options: [.regularExpression, .caseInsensitive]) {
+            let t = String(html[r]).replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty { title = t }
+        }
+        // Buang script/style, lalu semua tag.
+        html = html.replacingOccurrences(of: "<script[^>]*>.*?</script>", with: " ", options: [.regularExpression, .caseInsensitive])
+        html = html.replacingOccurrences(of: "<style[^>]*>.*?</style>", with: " ", options: [.regularExpression, .caseInsensitive])
+        var text = html.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+        // Decode entity umum
+        for (e, c) in ["&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&nbsp;": " "] {
+            text = text.replacingOccurrences(of: e, with: c)
+        }
+        // Rapatkan whitespace
+        text = text.replacingOccurrences(of: "[ \\t\\x0B\\f\\r]+", with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: "\\n{3,}", with: "\n\n", options: .regularExpression)
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw FetchError.empty }
+        return (title, String(text.prefix(maxChars)))
+    }
 }

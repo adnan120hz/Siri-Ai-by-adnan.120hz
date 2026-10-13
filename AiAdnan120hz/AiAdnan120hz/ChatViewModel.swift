@@ -28,6 +28,18 @@ final class ChatViewModel: ObservableObject {
             lastError = APIError.noKey.localizedDescription
             return
         }
+        // Model id basi/kosong (mis. key diganti tapi daftar model belum dimuat)
+        // → tolak dengan pesan jelas, jangan kirim request yang pasti gagal.
+        let modelId = conversation.modelId.isEmpty ? appState.defaultModelId : conversation.modelId
+        guard !modelId.isEmpty else {
+            lastError = "Belum ada model dipilih. Buka Pengaturan → Muat ulang daftar model."
+            return
+        }
+        // Akun free tidak boleh memakai model paid.
+        if appState.accountTier == .free && !APInexClient.isFreeModel(modelId) {
+            lastError = "Model ini khusus akun Paid. Pilih model free (awalan \"free/\") di Pengaturan."
+            return
+        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !imageDatas.isEmpty else { return }
 
@@ -48,7 +60,6 @@ final class ChatViewModel: ObservableObject {
         try? context.save()
 
         // 2. Bangun payload.
-        let modelId = conversation.modelId.isEmpty ? appState.defaultModelId : conversation.modelId
         let apiMessages = buildAPIMessages(conversation: conversation, context: context,
                                            currentText: trimmed, currentImages: imageDatas,
                                            memoryEnabled: appState.memoryEnabled,
@@ -62,31 +73,38 @@ final class ChatViewModel: ObservableObject {
         streamTask = Task { @MainActor in
             do {
                 var full = ""
+                var streamTokens = 0
                 // Coba streaming dulu; kalau server menolak, fallback non-streaming.
                 do {
                     for try await token in APInexClient.streamChat(apiKey: apiKey, model: modelId,
                                                                   messages: apiMessages) {
                         full += token
+                        streamTokens += 1
                         self.streamingText = full
                         assistantMsg.text = full
                     }
+                    // Token streaming dihitung asli; tambah estimasi prompt.
+                    let promptEst = apiMessages.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
+                    TokenUsage.record(tokens: streamTokens + promptEst)
                 } catch is APInexClient.StreamSetupFailed {
                     full = try await APInexClient.sendChat(apiKey: apiKey, model: modelId,
                                                            messages: apiMessages)
                     assistantMsg.text = full
                     self.streamingText = full
+                    let promptEst = apiMessages.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
+                    TokenUsage.record(tokens: promptEst + TokenUsage.estimateTokens(for: full))
                 }
                 assistantMsg.errorText = nil
                 try? context.save()
                 // 4. Ingatan + ringkasan (background task, diam kalau gagal).
                 if appState.memoryEnabled {
-                    Task {
+                    Task { @MainActor in
                         await MemoryService.learnFromExchange(apiKey: apiKey, model: modelId,
                                                              userText: trimmed, assistantText: full,
                                                              context: context)
                     }
                 }
-                Task {
+                Task { @MainActor in
                     await MemoryService.maybeSummarize(apiKey: apiKey, model: modelId,
                                                       conversation: conversation, context: context)
                 }
@@ -130,8 +148,15 @@ final class ChatViewModel: ObservableObject {
                                   memoryEnabled: Bool,
                                   excludeMessageId: UUID) -> [APInexClient.APIMessage] {
         var system = """
-        Kamu adalah asisten AI di aplikasi "Ai Adnan.120hz". Jawab dalam Bahasa Indonesia \
-        kecuali pengguna memakai bahasa lain. Jawaban ringkas tapi lengkap, format markdown sederhana.
+        Kamu adalah "Siri Ai", teman ngobrol yang santai dan natural — \
+        BUKAN robot customer service. Gaya bahasa: santai kayak ngobrol sama teman, \
+        tidak kaku, tidak formal/baku, jangan pakai banyak emoji (maksimal 1 sesekali, \
+        atau tidak sama sekali). Ikuti bahasa pengguna: kalau dia pakai Bahasa Indonesia \
+        santai, jawab dengan Bahasa Indonesia santai juga; kalau dia pakai bahasa lain, \
+        ikuti bahasa itu dengan gaya yang sama santainya. Jawaban ringkas tapi lengkap, \
+        boleh pakai markdown sederhana kalau membantu. Jawab langsung ke intinya tanpa \
+        ceramah; hanya tolak permintaan yang benar-benar berbahaya atau ilegal, dan kalau \
+        menolak, jelaskan singkat dalam satu kalimat santai.
         """
 
         let memExtra = MemoryService.systemPromptExtra(context: context,
