@@ -60,6 +60,8 @@ enum GitHubError: LocalizedError {
     case http(Int, String)
     case network(URLError)
     case decoding(String)
+    case noRepoAccess
+    case notFound(String)
 
     var errorDescription: String? {
         switch self {
@@ -69,6 +71,11 @@ enum GitHubError: LocalizedError {
             return "GitHub HTTP \(s)\n\(short)"
         case .network(let e): return "Jaringan: \(e.localizedDescription)"
         case .decoding(let s): return "Gagal baca respons: \(s)"
+        case .noRepoAccess:
+            return "Token tidak punya akses repository (GitHub mengembalikan 404). " +
+                "Buat token baru — classic: centang scope \"repo\"; " +
+                "fine-grained: beri akses ke repository yang dibutuhkan — lalu hubungkan ulang di menu ini."
+        case .notFound(let s): return "Tidak ditemukan: \(s). Periksa nama repo / path file."
         }
     }
 }
@@ -119,12 +126,21 @@ struct GitHubClient {
     }
 
     static func repos(token: String) async throws -> [Repo] {
-        try await get("user/repos?per_page=100&sort=updated", token: token)
+        do {
+            return try await get("user/repos?per_page=100&sort=updated", token: token)
+        } catch GitHubError.http(let s, _) where s == 404 {
+            // Fine-grained PAT tanpa akses repository → GitHub balas 404 (bukan 403).
+            throw GitHubError.noRepoAccess
+        }
     }
 
     static func tree(token: String, repo: String, branch: String) async throws -> [Tree.Entry] {
-        let t: Tree = try await get("repos/\(repo)/git/trees/\(branch)?recursive=1", token: token)
-        return t.tree.filter { $0.type == "blob" }
+        do {
+            let t: Tree = try await get("repos/\(repo)/git/trees/\(branch)?recursive=1", token: token)
+            return t.tree.filter { $0.type == "blob" }
+        } catch GitHubError.http(let s, _) where s == 404 {
+            throw GitHubError.notFound("repo \(repo)")
+        }
     }
 
     /// Ambil isi file mentah via raw.githubusercontent.com
@@ -142,6 +158,7 @@ struct GitHubClient {
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? -1
         guard status == 200 else {
+            if status == 404 { throw GitHubError.notFound("file \(path) di \(repo)") }
             throw GitHubError.http(status, String(data: data, encoding: .utf8) ?? "")
         }
         guard let text = String(data: data, encoding: .utf8), !text.isEmpty else {

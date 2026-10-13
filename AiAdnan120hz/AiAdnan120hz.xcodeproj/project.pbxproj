@@ -30,6 +30,7 @@
 		7BA961B1AEFAB76025C6135A /* IconCream-83.5@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 163B60742A387C1B45649486 /* IconCream-83.5@2x.png */; };
 		EB89A93AA92217127A8DB7B6 /* TokenUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F81D76A7907C7EB99225437 /* TokenUsage.swift */; };
 		51BEC7E343715065C00D5370 /* GitHubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C4B270D8C947F283B45797 /* GitHubClient.swift */; };
+		847BE9B5E7C14B378DD5E714 /* GitHubAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1DE8F7B0BB44B6DBFD1F5D3 /* GitHubAgent.swift */; };
 		931E526F06A9600B4AADBE6C /* TokenUsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F075E26C60C72E8466FDEE2 /* TokenUsageView.swift */; };
 		5058E687AA896C2876C126BF /* WebSourceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC26C798CE1869FC85BAFF0 /* WebSourceView.swift */; };
 		0C4B03A4A8733E0B7E8702AB /* ConnectivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E19CFC911C5EEF05C028818B /* ConnectivityView.swift */; };
@@ -62,6 +63,7 @@
 		770C5B730A8FBE3C009C5372 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
 		3F81D76A7907C7EB99225437 /* TokenUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TokenUsage.swift"; sourceTree = "<group>"; };
 		80C4B270D8C947F283B45797 /* GitHubClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GitHubClient.swift"; sourceTree = "<group>"; };
+		C1DE8F7B0BB44B6DBFD1F5D3 /* GitHubAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GitHubAgent.swift"; sourceTree = "<group>"; };
 		3F075E26C60C72E8466FDEE2 /* TokenUsageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TokenUsageView.swift"; sourceTree = "<group>"; };
 		FAC26C798CE1869FC85BAFF0 /* WebSourceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebSourceView.swift"; sourceTree = "<group>"; };
 		E19CFC911C5EEF05C028818B /* ConnectivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConnectivityView.swift"; sourceTree = "<group>"; };
@@ -103,6 +105,7 @@
 				770C5B730A8FBE3C009C5372 /* Info.plist */,
 							3F81D76A7907C7EB99225437 /* TokenUsage.swift */,
 				80C4B270D8C947F283B45797 /* GitHubClient.swift */,
+				C1DE8F7B0BB44B6DBFD1F5D3 /* GitHubAgent.swift */,
 );
 			path = "AiAdnan120hz";
 			sourceTree = "<group>";
@@ -233,6 +236,7 @@
 				CF36437D58F517D454213F05 /* Pickers.swift in Sources */,
 							EB89A93AA92217127A8DB7B6 /* TokenUsage.swift in Sources */,
 				51BEC7E343715065C00D5370 /* GitHubClient.swift in Sources */,
+				847BE9B5E7C14B378DD5E714 /* GitHubAgent.swift in Sources */,
 				931E526F06A9600B4AADBE6C /* TokenUsageView.swift in Sources */,
 				5058E687AA896C2876C126BF /* WebSourceView.swift in Sources */,
 				0C4B03A4A8733E0B7E8702AB /* ConnectivityView.swift in Sources */,

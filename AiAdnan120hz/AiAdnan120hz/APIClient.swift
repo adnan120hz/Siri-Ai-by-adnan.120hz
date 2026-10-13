@@ -71,11 +71,115 @@ struct APInexClient {
         var max_tokens: Int
         var temperature: Double
         var stream: Bool?
+        var tools: [ToolDef]?
+
+        enum CodingKeys: String, CodingKey {
+            case model, messages, max_tokens, temperature, stream, tools
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(model, forKey: .model)
+            try c.encode(messages, forKey: .messages)
+            try c.encode(max_tokens, forKey: .max_tokens)
+            try c.encode(temperature, forKey: .temperature)
+            try c.encodeIfPresent(stream, forKey: .stream)
+            try c.encodeIfPresent(tools, forKey: .tools)
+        }
     }
+
+    // MARK: - Function calling (tools)
+
+    struct PropSchema: Encodable {
+        var type: String
+        var description: String
+    }
+
+    struct ParamSchema: Encodable {
+        var type: String = "object"
+        var properties: [String: PropSchema]
+        var required: [String]
+    }
+
+    struct FunctionDef: Encodable {
+        var name: String
+        var description: String
+        var parameters: ParamSchema
+    }
+
+    struct ToolDef: Encodable {
+        var type: String = "function"
+        var function: FunctionDef
+    }
+
+    struct ToolCall: Decodable {
+        var id: String
+        struct Fn: Decodable { var name: String; var arguments: String }
+        var function: Fn
+    }
+
+    /// Daftar tools GitHub untuk AI agent. Dikirim hanya kalau token GitHub terhubung.
+    static let githubTools: [ToolDef] = [
+        ToolDef(function: FunctionDef(
+            name: "github_list_repos",
+            description: "Daftar semua repository GitHub milik user yang terhubung. Pakai ini kalau user tanya soal repo GitHub-nya, mis. 'bisa konek github?', 'list repo ku', 'repo apa aja yang aku punya'.",
+            parameters: ParamSchema(properties: [:], required: [])
+        )),
+        ToolDef(function: FunctionDef(
+            name: "github_list_files",
+            description: "Daftar file dalam sebuah repository. Parameter repo format 'owner/nama' (mis. 'adnan120hz/WorkSlop-Desktop-Version'). path_prefix opsional untuk filter folder.",
+            parameters: ParamSchema(
+                properties: [
+                    "repo": PropSchema(type: "string", description: "Nama repo format 'owner/nama'"),
+                    "path_prefix": PropSchema(type: "string", description: "Opsional: filter path, mis. 'src/'"),
+                ],
+                required: ["repo"]
+            )
+        )),
+        ToolDef(function: FunctionDef(
+            name: "github_read_file",
+            description: "Baca isi sebuah file teks dari repository. Parameter repo format 'owner/nama', path adalah path file dalam repo.",
+            parameters: ParamSchema(
+                properties: [
+                    "repo": PropSchema(type: "string", description: "Nama repo format 'owner/nama'"),
+                    "path": PropSchema(type: "string", description: "Path file dalam repo, mis. 'README.md'"),
+                ],
+                required: ["repo", "path"]
+            )
+        )),
+    ]
 
     struct APIMessage: Encodable {
         var role: String
         var content: MessageContent
+        /// Untuk pesan asisten dalam tool loop (OpenAI: tool_calls).
+        var toolCalls: [ToolCallOut]? = nil
+        /// Untuk pesan hasil tool (OpenAI: tool_call_id, role "tool").
+        var toolCallId: String? = nil
+
+        struct ToolCallOut: Encodable {
+            var id: String
+            var type: String = "function"
+            var function: FunctionOut
+            struct FunctionOut: Encodable {
+                var name: String
+                var arguments: String
+            }
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case role, content
+            case toolCalls = "tool_calls"
+            case toolCallId = "tool_call_id"
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(role, forKey: .role)
+            try c.encode(content, forKey: .content)
+            try c.encodeIfPresent(toolCalls, forKey: .toolCalls)
+            try c.encodeIfPresent(toolCallId, forKey: .toolCallId)
+        }
 
         /// Teks kasar untuk estimasi token (tidak dikirim ke server).
         var debugText: String {
@@ -126,8 +230,12 @@ struct APInexClient {
 
     struct Response: Decodable {
         struct Choice: Decodable {
-            struct Message: Decodable { var content: String? }
+            struct Message: Decodable {
+                var content: String?
+                var tool_calls: [ToolCall]?
+            }
             var message: Message
+            var finish_reason: String?
         }
         var choices: [Choice]
     }
@@ -185,17 +293,19 @@ struct APInexClient {
     }
 
     private static func makeRequest(apiKey: String, model: String,
-                                   messages: [APIMessage], stream: Bool) -> URLRequest {
+                                   messages: [APIMessage], stream: Bool,
+                                   tools: [ToolDef]? = nil) -> URLRequest {
         var req = URLRequest(url: baseURL.appendingPathComponent("chat/completions"))
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         // Streaming: token pertama harus cepat, tapi jawaban panjang butuh waktu → 180.
-        // Non-streaming: fail fast → 60.
-        req.timeoutInterval = stream ? 180 : 60
+        // Non-streaming: fail fast → 60. Tool loop: tiap putaran bisa panggil API → 90.
+        req.timeoutInterval = stream ? 180 : (tools == nil ? 60 : 90)
         let body = Request(model: model, messages: messages,
-                           max_tokens: 2048, temperature: 0.7, stream: stream ? true : nil)
+                           max_tokens: 2048, temperature: 0.7,
+                           stream: stream ? true : nil, tools: tools)
         req.httpBody = try? JSONEncoder().encode(body)
         return req
     }
@@ -220,6 +330,42 @@ struct APInexClient {
                 throw APIError.emptyReply
             }
             return text
+        } catch let e as APIError {
+            throw e
+        } catch {
+            throw APIError.decoding(error.localizedDescription)
+        }
+    }
+
+    /// Model menolak function calling (banyak model free kecil tidak support tools).
+    struct ToolsNotSupported: Error {}
+
+    /// Non-streaming dengan tools. Mengembalikan (teks jawaban, tool calls).
+    /// Melempar `ToolsNotSupported` kalau server/gateway menolak parameter tools.
+    static func sendChatWithTools(apiKey: String, model: String,
+                                  messages: [APIMessage],
+                                  tools: [ToolDef]) async throws -> (String?, [ToolCall]?) {
+        let req = makeRequest(apiKey: apiKey, model: model, messages: messages,
+                              stream: false, tools: tools)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: req)
+        } catch let e as URLError {
+            throw APIError.network(e)
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard status == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            let low = body.lowercased()
+            if low.contains("tool") || low.contains("function") {
+                throw ToolsNotSupported()
+            }
+            throw APIError.http(status: status, body: body)
+        }
+        do {
+            let decoded = try JSONDecoder().decode(Response.self, from: data)
+            guard let choice = decoded.choices.first else { throw APIError.emptyReply }
+            return (choice.message.content, choice.message.tool_calls)
         } catch let e as APIError {
             throw e
         } catch {

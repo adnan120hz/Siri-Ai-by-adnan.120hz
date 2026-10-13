@@ -1,13 +1,5 @@
 import SwiftUI
 import SwiftData
-import PhotosUI
-import UniformTypeIdentifiers
-
-struct PendingMedia: Identifiable {
-    let id = UUID()
-    let data: Data
-    let isVideoFrame: Bool
-}
 
 struct ChatView: View {
     @Bindable var conversation: Conversation
@@ -16,8 +8,6 @@ struct ChatView: View {
     @StateObject private var viewModel = ChatViewModel()
 
     @State private var inputText = ""
-    @State private var pendingMedia: [PendingMedia] = []
-    @State private var showMediaPicker = false
     @State private var showDocPicker = false
     @State private var showWebSource = false
     @State private var alertText: String?
@@ -92,45 +82,14 @@ struct ChatView: View {
                 }
             }
 
-            if !pendingMedia.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack {
-                        ForEach(pendingMedia) { pm in
-                            ZStack(alignment: .topTrailing) {
-                                if let ui = UIImage(data: pm.data) {
-                                    Image(uiImage: ui)
-                                        .resizable().scaledToFill()
-                                        .frame(width: 64, height: 64)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                }
-                                Button {
-                                    pendingMedia.removeAll { $0.id == pm.id }
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .background(Circle().fill(.white))
-                                }
-                                .offset(x: 6, y: -6)
-                            }
-                            .padding(.trailing, 6)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 6)
-                }
-            }
-
             HStack(spacing: 8) {
                 Menu {
-                    Button { showMediaPicker = true } label: {
-                        Label("Foto / Video", systemImage: "photo")
-                    }
                     Button { showDocPicker = true } label: {
                         Label("Import Source (txt/md/pdf)", systemImage: "doc.badge.plus")
                     }
                     Button { showWebSource = true } label: {
                         Label("Source Web (URL)", systemImage: "globe")
                     }
-                    Text("Analisis gambar butuh model vision, mis. free/glm-5.3-flash.")
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
@@ -144,7 +103,7 @@ struct ChatView: View {
                     Image(systemName: viewModel.isSending ? "stop.circle.fill" : "arrow.up.circle.fill")
                         .font(.title2)
                 }
-                .disabled(viewModel.isSending ? false : (inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && pendingMedia.isEmpty))
+                .disabled(viewModel.isSending ? false : inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding()
         }
@@ -180,9 +139,6 @@ struct ChatView: View {
                 }
             }
         }
-        .sheet(isPresented: $showMediaPicker) {
-            MediaPicker { handlePickerResults($0) }
-        }
         .sheet(isPresented: $showDocPicker) {
             DocumentPicker { importSource(from: $0) }
         }
@@ -209,16 +165,10 @@ struct ChatView: View {
     @MainActor
     private func send() {
         if viewModel.isSending { viewModel.cancel(); return }
-        let imgs = pendingMedia.map { ($0.data, $0.isVideoFrame) }
-        let frameCount = pendingMedia.filter(\.isVideoFrame).count
-        let note: String? = frameCount > 0
-            ? "Video dikirim sebagai \(frameCount) frame gambar."
-            : nil
         viewModel.send(conversation: conversation, text: inputText,
-                       imageDatas: imgs, note: note,
+                       imageDatas: [], note: nil,
                        context: context, appState: appState)
         inputText = ""
-        pendingMedia = []
     }
 
     private func reloadModels() {
@@ -255,41 +205,6 @@ struct ChatView: View {
         }
     }
 
-    private func handlePickerResults(_ results: [PHPickerResult]) {
-        for result in results {
-            let provider = result.itemProvider
-            if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
-                provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, _ in
-                    guard let url else { return }
-                    let tmp = FileManager.default.temporaryDirectory
-                        .appendingPathComponent(UUID().uuidString + ".mov")
-                    try? FileManager.default.copyItem(at: url, to: tmp)
-                    Task { @MainActor in
-                        let frames = await MediaService.extractFrames(from: tmp)
-                        await MainActor.run {
-                            for f in frames {
-                                pendingMedia.append(PendingMedia(data: f, isVideoFrame: true))
-                            }
-                            if frames.isEmpty {
-                                alertText = "Gagal mengekstrak frame dari video."
-                            }
-                        }
-                        try? FileManager.default.removeItem(at: tmp)
-                    }
-                }
-            } else {
-                provider.loadObject(ofClass: UIImage.self) { obj, _ in
-                    guard let img = obj as? UIImage,
-                          let raw = img.jpegData(compressionQuality: 0.9),
-                          let scaled = MediaService.downscaleJPEG(raw) else { return }
-                    Task { @MainActor in
-                        pendingMedia.append(PendingMedia(data: scaled, isVideoFrame: false))
-                    }
-                }
-            }
-        }
-    }
-
     private func checkStorage() {
         Task.detached {
             let ratio = StorageQuota.usageRatio
@@ -312,6 +227,14 @@ struct MessageRow: View {
     let onRetry: () -> Void
     let onDelete: () -> Void
 
+    /// Lebar maksimum bubble: 75% lebar layar (maks 520pt untuk iPad).
+    private var maxBubbleWidth: CGFloat {
+        min(UIScreen.main.bounds.width * 0.75, 520)
+    }
+
+    private let bubblePadding: CGFloat = 12
+    private let bubbleRadius: CGFloat = 16
+
     var body: some View {
         Group {
             if message.role == "user" {
@@ -321,15 +244,16 @@ struct MessageRow: View {
                         imageStrip
                         if !message.text.isEmpty {
                             Text(message.text)
-                                .padding(10)
+                                .padding(bubblePadding)
                                 .background(Color.accentColor)
                                 .foregroundStyle(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .clipShape(RoundedRectangle(cornerRadius: bubbleRadius))
                         }
                         if let note = message.note {
                             Text(note).font(.caption2).foregroundStyle(.secondary)
                         }
                     }
+                    .frame(maxWidth: maxBubbleWidth, alignment: .trailing)
                 }
             } else {
                 HStack {
@@ -345,36 +269,37 @@ struct MessageRow: View {
                                 Button("Coba lagi") { onRetry() }
                                     .font(.subheadline)
                             }
-                            .padding(12)
+                            .padding(bubblePadding)
                             .background(Color.red.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .clipShape(RoundedRectangle(cornerRadius: bubbleRadius))
                         } else {
                             let shown = (isStreaming && !streamingText.isEmpty) ? streamingText : message.text
                             if isStreaming && shown.isEmpty {
                                 // Indikator mengetik: AI sedang "berpikir", jangan terkesan instan.
                                 TypingIndicator()
-                                    .padding(12)
+                                    .padding(bubblePadding)
                                     .background(Color.secondary.opacity(0.15))
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .clipShape(RoundedRectangle(cornerRadius: bubbleRadius))
                             } else if shown.isEmpty {
                                 // Respons kosong tapi tidak error: tampilkan placeholder
                                 // agar tidak terlihat seperti layar hitam.
                                 Text("Respons kosong dari AI.")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
-                                    .padding(12)
+                                    .padding(bubblePadding)
                                     .background(Color.secondary.opacity(0.15))
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .clipShape(RoundedRectangle(cornerRadius: bubbleRadius))
                             } else {
                                 Text(shown)
                                     .foregroundStyle(.primary)
                                     .textSelection(.enabled)
-                                    .padding(12)
+                                    .padding(bubblePadding)
                                     .background(Color.secondary.opacity(0.15))
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .clipShape(RoundedRectangle(cornerRadius: bubbleRadius))
                             }
                         }
                     }
+                    .frame(maxWidth: maxBubbleWidth, alignment: .leading)
                     Spacer(minLength: 40)
                 }
             }

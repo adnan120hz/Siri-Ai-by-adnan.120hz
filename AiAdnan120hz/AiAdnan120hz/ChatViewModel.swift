@@ -71,27 +71,26 @@ final class ChatViewModel: ObservableObject {
 
         streamTask = Task { @MainActor in
             do {
-                var full = ""
-                var streamTokens = 0
-                // Coba streaming dulu; kalau server menolak, fallback non-streaming.
-                do {
-                    for try await token in APInexClient.streamChat(apiKey: apiKey, model: modelId,
-                                                                  messages: apiMessages) {
-                        full += token
-                        streamTokens += 1
-                        self.streamingText = full
-                        assistantMsg.text = full
+                var full: String
+                let ghConnected = !(GitHubStore.load() ?? "").isEmpty
+                if ghConnected {
+                    // Mode AGENT: AI bisa panggil tools GitHub beneran.
+                    // Kalau model tidak support function calling → fallback streaming biasa.
+                    do {
+                        full = try await self.agentTurn(apiKey: apiKey, model: modelId,
+                                                        messages: apiMessages,
+                                                        assistantMsg: assistantMsg)
+                    } catch is APInexClient.ToolsNotSupported {
+                        let (t, _) = try await self.streamingTurn(apiKey: apiKey, model: modelId,
+                                                                  messages: apiMessages,
+                                                                  assistantMsg: assistantMsg)
+                        full = t
                     }
-                    // Token streaming dihitung asli; tambah estimasi prompt.
-                    let promptEst = apiMessages.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
-                    TokenUsage.record(tokens: streamTokens + promptEst)
-                } catch is APInexClient.StreamSetupFailed {
-                    full = try await APInexClient.sendChat(apiKey: apiKey, model: modelId,
-                                                           messages: apiMessages)
-                    assistantMsg.text = full
-                    self.streamingText = full
-                    let promptEst = apiMessages.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
-                    TokenUsage.record(tokens: promptEst + TokenUsage.estimateTokens(for: full))
+                } else {
+                    let (t, _) = try await self.streamingTurn(apiKey: apiKey, model: modelId,
+                                                              messages: apiMessages,
+                                                              assistantMsg: assistantMsg)
+                    full = t
                 }
                 assistantMsg.errorText = nil
                 try? context.save()
@@ -124,6 +123,81 @@ final class ChatViewModel: ObservableObject {
             self.streamingText = ""
             self.streamTask = nil
         }
+    }
+
+    /// Jalur biasa: streaming dulu, fallback non-streaming.
+    /// Mengembalikan (teks lengkap, estimasi token).
+    private func streamingTurn(apiKey: String, model: String,
+                               messages: [APInexClient.APIMessage],
+                               assistantMsg: ChatMessage) async throws -> (String, Int) {
+        var full = ""
+        var streamTokens = 0
+        // Coba streaming dulu; kalau server menolak, fallback non-streaming.
+        do {
+            for try await token in APInexClient.streamChat(apiKey: apiKey, model: model,
+                                                           messages: messages) {
+                full += token
+                streamTokens += 1
+                self.streamingText = full
+                assistantMsg.text = full
+            }
+            // Token streaming dihitung asli; tambah estimasi prompt.
+            let promptEst = messages.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
+            TokenUsage.record(tokens: streamTokens + promptEst)
+        } catch is APInexClient.StreamSetupFailed {
+            full = try await APInexClient.sendChat(apiKey: apiKey, model: model,
+                                                   messages: messages)
+            assistantMsg.text = full
+            self.streamingText = full
+            let promptEst = messages.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
+            TokenUsage.record(tokens: promptEst + TokenUsage.estimateTokens(for: full))
+        }
+        return (full, streamTokens)
+    }
+
+    /// Jalur AGENT: tool loop GitHub (non-streaming).
+    /// Selama proses, typing indicator tampil (streamingText kosong + isSending).
+    private func agentTurn(apiKey: String, model: String,
+                           messages: [APInexClient.APIMessage],
+                           assistantMsg: ChatMessage) async throws -> String {
+        var msgs = messages
+        var lastText: String? = nil
+        for _ in 0..<GitHubAgent.maxIterations {
+            try Task.checkCancellation()
+            let (text, calls) = try await APInexClient.sendChatWithTools(
+                apiKey: apiKey, model: model, messages: msgs,
+                tools: APInexClient.githubTools)
+            lastText = text
+            guard let calls, !calls.isEmpty else {
+                let final = text ?? ""
+                assistantMsg.text = final
+                self.streamingText = final
+                let promptEst = msgs.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
+                TokenUsage.record(tokens: promptEst + TokenUsage.estimateTokens(for: final))
+                return final
+            }
+            // Rekam pesan asisten + hasil eksekusi tools untuk putaran berikut.
+            msgs.append(APInexClient.APIMessage(
+                role: "assistant",
+                content: .text(text ?? ""),
+                toolCalls: calls.map {
+                    APInexClient.APIMessage.ToolCallOut(
+                        id: $0.id,
+                        function: .init(name: $0.function.name,
+                                        arguments: $0.function.arguments))
+                }))
+            for call in calls {
+                let result = await GitHubAgent.execute(name: call.function.name,
+                                                       arguments: call.function.arguments)
+                msgs.append(APInexClient.APIMessage(role: "tool",
+                                                    content: .text(result),
+                                                    toolCallId: call.id))
+            }
+        }
+        let final = lastText ?? ""
+        assistantMsg.text = final
+        self.streamingText = final
+        return final
     }
 
     /// Kirim ulang: hapus pesan asisten terakhir lalu kirim ulang pesan user sebelumnya.
@@ -182,6 +256,22 @@ final class ChatViewModel: ObservableObject {
                 "=== Sumber: \($0.fileName) ===\n\($0.extractedText.prefix(12000))"
             }.joined(separator: "\n\n")
             system += "\n\nPengguna melampirkan sumber berikut. Pakai sebagai referensi utama saat relevan:\n\(src)"
+        }
+
+        if let gh = GitHubStore.load(), !gh.isEmpty {
+            system += """
+
+            KAMU PUNYA AKSES GITHUB ASLI (bukan simulasi). User sudah menghubungkan GitHub di menu \
+            Konektivitas — token tersimpan aman di HP ini, JANGAN pernah minta token di chat.
+            Kamu punya tools function-calling:
+            - github_list_repos → daftar semua repo user
+            - github_list_files(repo, path_prefix opsional) → daftar file dalam repo (repo format "owner/nama")
+            - github_read_file(repo, path) → baca isi file teks
+            Aturan: kalau user bertanya tentang GitHub / repo / kode ("bisa konek github?", "list repo", \
+            "bacakan file ..."), WAJIB pakai tools untuk menjawab dengan data nyata — buktikan, jangan \
+            bilang tidak bisa. Kalau tools tidak tersedia di model ini, arahkan user ke Pengaturan → \
+            Konektivitas → GitHub (tetap jangan minta token di chat).
+            """
         }
 
         var out: [APInexClient.APIMessage] = [
