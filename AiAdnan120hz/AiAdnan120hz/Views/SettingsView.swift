@@ -81,9 +81,7 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    NavigationLink {
-                        ConnectivityView()
-                    } label: {
+                    NavigationLink(destination: ConnectivityView()) {
                         Label("Konektivitas", systemImage: "link")
                     }
                     Text("Hubungkan GitHub (akses repo sebagai source) dan simpan link media sosial.")
@@ -95,7 +93,7 @@ struct SettingsView: View {
                     Text("Ingatan 100% lokal di HP ini (bukan cloud). AI merangkum obrolan dan menyimpan fakta tentangmu untuk dipakai di prompt berikutnya.")
                         .font(.footnote).foregroundStyle(.secondary)
                     if !facts.isEmpty {
-                        NavigationLink {
+                        NavigationLink(destination:
                             List {
                                 ForEach(facts) { f in
                                     VStack(alignment: .leading) {
@@ -109,7 +107,7 @@ struct SettingsView: View {
                                 }
                             }
                             .navigationTitle("Ingatan AI")
-                        } label: {
+                        ) {
                             Text("Lihat ingatan (\(facts.count))")
                         }
                     }

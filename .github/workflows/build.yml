@@ -20,15 +20,6 @@ jobs:
       - name: Xcode version
         run: xcodebuild -version
 
-      - name: Debug - show SettingsView line 93
-        run: |
-          echo "=== git HEAD ==="
-          git rev-parse HEAD
-          echo "=== SettingsView.swift lines 90-100 ==="
-          sed -n '90,100p' AiAdnan120hz/AiAdnan120hz/Views/SettingsView.swift
-          echo "=== grep NavigationLink ==="
-          grep -n 'NavigationLink("' AiAdnan120hz/AiAdnan120hz/Views/SettingsView.swift || echo "No old-style NavigationLink found (GOOD)"
-
       - name: Archive (unsigned)
         run: |
           xcodebuild \
