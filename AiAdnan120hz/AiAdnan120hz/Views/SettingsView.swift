@@ -97,7 +97,6 @@ struct SettingsView: View {
                         for f in facts { context.delete(f) }
                         try? context.save()
                     }
-                    .disabled(facts.isEmpty)
                 }
 
                 Section(header: Text("Penyimpanan lokal")) {
