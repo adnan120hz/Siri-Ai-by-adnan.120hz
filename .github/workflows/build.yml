@@ -30,7 +30,8 @@ jobs:
             -archivePath "$GITHUB_WORKSPACE/build/SiriAi.xcarchive" \
             archive \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+            CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee "${{ runner.temp }}/xcodebuild.log"
 
       - name: Package unsigned IPA
         run: |
@@ -41,6 +42,14 @@ jobs:
           cd "$GITHUB_WORKSPACE/ipa"
           zip -qry "$GITHUB_WORKSPACE/SiriAi-unsigned.ipa" Payload
           ls -lh "$GITHUB_WORKSPACE/SiriAi-unsigned.ipa"
+
+      - name: Upload build log (always, for debugging failures)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BuildLog
+          path: ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: warn
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
