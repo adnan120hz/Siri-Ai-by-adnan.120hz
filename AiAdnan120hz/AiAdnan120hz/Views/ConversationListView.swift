@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - Daftar obrolan ala Siri app iOS 27: grid kartu 2 kolom.
+// MARK: - Daftar obrolan: grid kartu 2 kolom.
 
 struct ConversationListView: View {
     @Environment(\.modelContext) private var context
@@ -16,13 +16,16 @@ struct ConversationListView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                SiriBackground()
+                Color(.systemBackground).ignoresSafeArea()
                 ScrollView {
                     if conversations.isEmpty {
                         VStack(spacing: 12) {
-                            SiriOrbView(size: 120, animating: false)
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .font(.system(size: 56))
+                                .foregroundStyle(.secondary)
                             Text("Belum ada obrolan")
                                 .font(.headline)
+                                .foregroundStyle(.primary)
                             Text("Ketuk + untuk mulai obrolan baru.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -34,7 +37,7 @@ struct ConversationListView: View {
                         LazyVGrid(columns: columns, spacing: 12) {
                             ForEach(conversations) { convo in
                                 NavigationLink(destination: ChatView(conversation: convo)) {
-                                    SiriConversationCard(conversation: convo)
+                                    ConversationCard(conversation: convo)
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
@@ -51,7 +54,7 @@ struct ConversationListView: View {
                     }
                 }
             }
-            .navigationTitle("Siri Ai")
+            .navigationTitle("ai adnan.120hz")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -70,9 +73,9 @@ struct ConversationListView: View {
     }
 }
 
-// MARK: - Kartu obrolan ala Siri
+// MARK: - Kartu obrolan
 
-struct SiriConversationCard: View {
+struct ConversationCard: View {
     let conversation: Conversation
     @Environment(\.colorScheme) private var scheme
 

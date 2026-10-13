@@ -20,7 +20,6 @@ struct ChatView: View {
     @State private var showMediaPicker = false
     @State private var showDocPicker = false
     @State private var showWebSource = false
-    @State private var showVoice = false
     @State private var alertText: String?
     @State private var storageWarning: String?
 
@@ -84,6 +83,7 @@ struct ChatView: View {
                     }
                     .padding()
                 }
+                .background(Color(.systemBackground))
                 .onChange(of: sortedMessages.count) { _, _ in
                     if let last = sortedMessages.last { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
@@ -130,6 +130,7 @@ struct ChatView: View {
                     Button { showWebSource = true } label: {
                         Label("Source Web (URL)", systemImage: "globe")
                     }
+                    Text("Analisis gambar butuh model vision, mis. free/glm-5.3-flash.")
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
@@ -138,11 +139,6 @@ struct ChatView: View {
                 TextField("Tulis pesan…", text: $inputText, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...5)
-
-                Button { showVoice = true } label: {
-                    Image(systemName: "mic.circle.fill")
-                        .font(.title2)
-                }
 
                 Button { Task { @MainActor in send() } } label: {
                     Image(systemName: viewModel.isSending ? "stop.circle.fill" : "arrow.up.circle.fill")
@@ -161,17 +157,15 @@ struct ChatView: View {
                         Text("Belum ada daftar model")
                     } else {
                         ForEach(appState.availableModels, id: \.self) { m in
-                            let locked = appState.accountTier == .free && !APInexClient.isFreeModel(m)
                             Button {
                                 conversation.modelId = m
                                 try? context.save()
                             } label: {
                                 HStack {
-                                    Text(m + (locked ? " · Paid" : ""))
+                                    Text(m)
                                     if m == conversation.modelId { Image(systemName: "checkmark") }
                                 }
                             }
-                            .disabled(locked)
                         }
                     }
                     Divider()
@@ -194,9 +188,6 @@ struct ChatView: View {
         }
         .sheet(isPresented: $showWebSource) {
             WebSourceView(conversation: conversation)
-        }
-        .sheet(isPresented: $showVoice) {
-            VoiceModeView(conversation: conversation)
         }
         .alert("Info", isPresented: Binding(
             get: { alertText != nil },
@@ -237,11 +228,11 @@ struct ChatView: View {
         }
         Task { @MainActor in
             do {
-                let models = try await APInexClient.fetchModels(apiKey: key)
+                let models = try await APInexClient.fetchFreeModels(apiKey: key)
                 await MainActor.run {
                     appState.availableModels = models
-                    if conversation.modelId.isEmpty, let first = models.first {
-                        conversation.modelId = first
+                    if !models.contains(conversation.modelId) {
+                        conversation.modelId = models.first ?? ""
                         try? context.save()
                     }
                 }
@@ -328,11 +319,13 @@ struct MessageRow: View {
                     Spacer(minLength: 40)
                     VStack(alignment: .trailing, spacing: 6) {
                         imageStrip
-                        Text(message.text)
-                            .padding(10)
-                            .background(Color.accentColor)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        if !message.text.isEmpty {
+                            Text(message.text)
+                                .padding(10)
+                                .background(Color.accentColor)
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
                         if let note = message.note {
                             Text(note).font(.caption2).foregroundStyle(.secondary)
                         }
@@ -363,8 +356,18 @@ struct MessageRow: View {
                                     .padding(12)
                                     .background(Color.secondary.opacity(0.15))
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
+                            } else if shown.isEmpty {
+                                // Respons kosong tapi tidak error: tampilkan placeholder
+                                // agar tidak terlihat seperti layar hitam.
+                                Text("Respons kosong dari AI.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .padding(12)
+                                    .background(Color.secondary.opacity(0.15))
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
                             } else {
                                 Text(shown)
+                                    .foregroundStyle(.primary)
                                     .textSelection(.enabled)
                                     .padding(12)
                                     .background(Color.secondary.opacity(0.15))

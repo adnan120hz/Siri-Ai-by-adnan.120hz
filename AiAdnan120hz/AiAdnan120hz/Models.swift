@@ -139,14 +139,8 @@ final class AppState: ObservableObject {
     @Published var appearanceMode: String = UserDefaults.standard.string(forKey: "appearanceMode") ?? "dark" {
         didSet { UserDefaults.standard.set(appearanceMode, forKey: "appearanceMode") }
     }
-    /// Tier akun APInex: "unknown" | "free" | "paid"
-    @Published var accountTier: APInexClient.AccountTier = .unknown {
-        didSet { UserDefaults.standard.set(accountTier.rawValue, forKey: "accountTier") }
-    }
 
     init() {
-        let raw = UserDefaults.standard.string(forKey: "accountTier") ?? "unknown"
-        accountTier = APInexClient.AccountTier(rawValue: raw) ?? .unknown
         refreshKeyStatus()
     }
 

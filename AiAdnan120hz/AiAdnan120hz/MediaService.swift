@@ -7,7 +7,8 @@ import UniformTypeIdentifiers
 // MARK: - Media: foto → base64 image_url; video → ekstraksi frame.
 
 enum MediaService {
-    static let maxImageDimension: CGFloat = 1536
+    // 1024px cukup untuk vision dan jauh lebih cepat di-upload daripada 1536.
+    static let maxImageDimension: CGFloat = 1024
     static let maxVideoFrames = 4
 
     /// Kecilkan UIImage-data ke batas dimensi, kembalikan JPEG.

@@ -78,27 +78,16 @@ struct APIKeyView: View {
         isError = false
         Task { @MainActor in
             do {
-                let models = try await APInexClient.fetchModels(apiKey: key)
-                // Deteksi tier: probe model paid termurah.
-                var tier = APInexClient.AccountTier.unknown
-                if let paid = models.first(where: { !APInexClient.isFreeModel($0) }) {
-                    tier = (try? await APInexClient.detectTier(apiKey: key, paidModelId: paid)) ?? .unknown
-                } else {
-                    // Tidak ada model paid di daftar → anggap free.
-                    tier = .free
-                }
+                // Hanya model free (prefix "free/"). Tidak ada probe paid.
+                let models = try await APInexClient.fetchFreeModels(apiKey: key)
                 await MainActor.run {
                     appState.availableModels = models
-                    appState.accountTier = tier
-                    // Model bawaan lama bisa jadi tidak ada di akun key baru,
-                    // atau model paid yang sekarang ke-lock → reset.
+                    // Model lama bisa jadi ID non-free (mis. "glm-5.3-flash") → reset ke free.
                     let cur = appState.defaultModelId
-                    let curLocked = tier == .free && !cur.isEmpty && !APInexClient.isFreeModel(cur)
-                    if !models.contains(cur) || curLocked {
-                        appState.defaultModelId = models.first(where: { APInexClient.isFreeModel($0) }) ?? models.first ?? ""
+                    if !models.contains(cur) {
+                        appState.defaultModelId = models.first ?? ""
                     }
-                    let tierText = tier == .paid ? "Paid" : tier == .free ? "Free" : "?"
-                    message = "Key valid (\(tierText)) — \(models.count) model tersedia."
+                    message = "Key valid — \(models.count) model free tersedia."
                     isError = false
                     isValidating = false
                 }
@@ -119,7 +108,6 @@ struct APIKeyView: View {
             appState.refreshKeyStatus()
             appState.availableModels = []
             appState.defaultModelId = ""
-            appState.accountTier = .unknown
             message = "Key dihapus."
             isError = false
         } else {

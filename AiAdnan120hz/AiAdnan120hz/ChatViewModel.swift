@@ -28,16 +28,15 @@ final class ChatViewModel: ObservableObject {
             lastError = APIError.noKey.localizedDescription
             return
         }
-        // Model id basi/kosong (mis. key diganti tapi daftar model belum dimuat)
-        // → tolak dengan pesan jelas, jangan kirim request yang pasti gagal.
-        let modelId = conversation.modelId.isEmpty ? appState.defaultModelId : conversation.modelId
+        // Model id basi/kosong (mis. key diganti tapi daftar model belum dimuat,
+        // atau ID lama non-free seperti "glm-5.3-flash") → normalisasi ke model free.
+        var modelId = conversation.modelId.isEmpty ? appState.defaultModelId : conversation.modelId
+        if !APInexClient.isFreeModel(modelId) {
+            modelId = appState.defaultModelId
+            conversation.modelId = modelId
+        }
         guard !modelId.isEmpty else {
             lastError = "Belum ada model dipilih. Buka Pengaturan → Muat ulang daftar model."
-            return
-        }
-        // Akun free tidak boleh memakai model paid.
-        if appState.accountTier == .free && !APInexClient.isFreeModel(modelId) {
-            lastError = "Model ini khusus akun Paid. Pilih model free (awalan \"free/\") di Pengaturan."
             return
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -110,11 +109,13 @@ final class ChatViewModel: ObservableObject {
                 }
             } catch let e as APIError {
                 assistantMsg.text = ""
-                assistantMsg.errorText = e.localizedDescription
-                self.lastError = e.localizedDescription
+                let desc = Self.visionHintIfNeeded(e.localizedDescription, hadImages: !imageDatas.isEmpty)
+                assistantMsg.errorText = desc
+                self.lastError = desc
                 try? context.save()
             } catch {
-                let desc = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                var desc = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                desc = Self.visionHintIfNeeded(desc, hadImages: !imageDatas.isEmpty)
                 assistantMsg.errorText = desc
                 self.lastError = desc
                 try? context.save()
@@ -142,13 +143,25 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Bangun konteks API
 
+    /// Kalau request mengandung gambar dan server menolak karena vision,
+    /// tambahkan saran model free yang support vision.
+    private static func visionHintIfNeeded(_ desc: String, hadImages: Bool) -> String {
+        guard hadImages else { return desc }
+        let low = desc.lowercased()
+        if low.contains("vision") || low.contains("image") || low.contains("multimodal")
+            || low.contains("unsupported") || low.contains("tidak didukung") {
+            return desc + "\n\nModel ini tampaknya tidak support analisis gambar. Coba free/glm-5.3-flash."
+        }
+        return desc
+    }
+
     private func buildAPIMessages(conversation: Conversation, context: ModelContext,
                                   currentText: String,
                                   currentImages: [(data: Data, isVideoFrame: Bool)],
                                   memoryEnabled: Bool,
                                   excludeMessageId: UUID) -> [APInexClient.APIMessage] {
         var system = """
-        Kamu adalah "Siri Ai", teman ngobrol yang santai dan natural — \
+        Kamu adalah "ai adnan.120hz", teman ngobrol yang santai dan natural — \
         BUKAN robot customer service. Gaya bahasa: santai kayak ngobrol sama teman, \
         tidak kaku, tidak formal/baku, jangan pakai banyak emoji (maksimal 1 sesekali, \
         atau tidak sama sekali). Ikuti bahasa pengguna: kalau dia pakai Bahasa Indonesia \
@@ -185,11 +198,14 @@ final class ChatViewModel: ObservableObject {
         }
 
         // Pesan saat ini (dengan gambar kalau ada).
+        // Vision: selalu sertakan text part — banyak server menolak payload
+        // yang hanya berisi image tanpa teks.
         if currentImages.isEmpty {
             out.append(APInexClient.APIMessage(role: "user", content: .text(currentText)))
         } else {
             var parts: [APInexClient.ContentPart] = []
-            if !currentText.isEmpty { parts.append(.text(currentText)) }
+            let caption = currentText.isEmpty ? "Tolong analisis dan jelaskan gambar ini." : currentText
+            parts.append(.text(caption))
             for img in currentImages {
                 parts.append(.image(dataURL: MediaService.dataURL(jpeg: img.data)))
             }

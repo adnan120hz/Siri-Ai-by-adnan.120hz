@@ -11,7 +11,6 @@
 		FD5C1E28C54839A54F0BF063 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66FD2A1109E4240E5F700D2D /* KeychainStore.swift */; };
 		E8F54F3AAEAE2429B84E4829 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60A3332900E007291C4D2501 /* APIClient.swift */; };
 		631E43E6F615B849A1268CB8 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72612619AFEA3F28D48495FE /* ChatViewModel.swift */; };
-		2A80FC988C73DEFBEF28ECA0 /* SpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745FD85DB68E9BD7080BA4E6 /* SpeechService.swift */; };
 		C0129ACCD92E3FE44AD6123E /* MediaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61363FBBF40DADEDAA717D84 /* MediaService.swift */; };
 		634A9FA4EA04A6EB2257BD34 /* SourceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB9111ED4C6C84430991C974 /* SourceExtractor.swift */; };
 		76074D6502CB454A1E32F4B7 /* MemoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB501B1834DA052B65309C17 /* MemoryService.swift */; };
@@ -21,7 +20,6 @@
 		D4F70AFAB7165E01BF46C059 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 800DBCEA696385250E8402FF /* ChatView.swift */; };
 		07816E666B4D5F9D87D1BB0F /* APIKeyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D71C48FDF9994411CDA7BB02 /* APIKeyView.swift */; };
 		51FF16094E9177729A7DB4D8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F744F6D6EBF1B44CEF76CC1 /* SettingsView.swift */; };
-		B68517248C6885107070A70D /* VoiceModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83FB7BE52629566AC31847EA /* VoiceModeView.swift */; };
 		CF36437D58F517D454213F05 /* Pickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B46BC5DFD3B65EDC5B8D9AB /* Pickers.swift */; };
 		5FD9A7DAC701D860C18C5EE3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B503598C3C0D3A574333D1D6 /* Assets.xcassets */; };
 		FA93D0E4EB74D29221EF0BA5 /* IconSwiss@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F03759565B94F24A35F38012 /* IconSwiss@2x.png */; };
@@ -32,9 +30,6 @@
 		7BA961B1AEFAB76025C6135A /* IconCream-83.5@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 163B60742A387C1B45649486 /* IconCream-83.5@2x.png */; };
 		EB89A93AA92217127A8DB7B6 /* TokenUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F81D76A7907C7EB99225437 /* TokenUsage.swift */; };
 		51BEC7E343715065C00D5370 /* GitHubClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80C4B270D8C947F283B45797 /* GitHubClient.swift */; };
-		8627A9539666D4FC2E04A2F5 /* SiriOrbView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27D9338DABB8705AD8964E77 /* SiriOrbView.swift */; };
-		213E18AFE9BEDBB98FE730D9 /* SiriVoiceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CF1E92A5C36400F4A733A34 /* SiriVoiceSettingsView.swift */; };
-		0E703036D9138ADAB225C218 /* SiriHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75D400C12DD98D5B2EDA32F7 /* SiriHomeView.swift */; };
 		931E526F06A9600B4AADBE6C /* TokenUsageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F075E26C60C72E8466FDEE2 /* TokenUsageView.swift */; };
 		5058E687AA896C2876C126BF /* WebSourceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAC26C798CE1869FC85BAFF0 /* WebSourceView.swift */; };
 		0C4B03A4A8733E0B7E8702AB /* ConnectivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E19CFC911C5EEF05C028818B /* ConnectivityView.swift */; };
@@ -47,7 +42,6 @@
 		66FD2A1109E4240E5F700D2D /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KeychainStore.swift"; sourceTree = "<group>"; };
 		60A3332900E007291C4D2501 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient.swift"; sourceTree = "<group>"; };
 		72612619AFEA3F28D48495FE /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatViewModel.swift"; sourceTree = "<group>"; };
-		745FD85DB68E9BD7080BA4E6 /* SpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SpeechService.swift"; sourceTree = "<group>"; };
 		61363FBBF40DADEDAA717D84 /* MediaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MediaService.swift"; sourceTree = "<group>"; };
 		FB9111ED4C6C84430991C974 /* SourceExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SourceExtractor.swift"; sourceTree = "<group>"; };
 		DB501B1834DA052B65309C17 /* MemoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MemoryService.swift"; sourceTree = "<group>"; };
@@ -57,7 +51,6 @@
 		800DBCEA696385250E8402FF /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatView.swift"; sourceTree = "<group>"; };
 		D71C48FDF9994411CDA7BB02 /* APIKeyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIKeyView.swift"; sourceTree = "<group>"; };
 		4F744F6D6EBF1B44CEF76CC1 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
-		83FB7BE52629566AC31847EA /* VoiceModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceModeView.swift"; sourceTree = "<group>"; };
 		4B46BC5DFD3B65EDC5B8D9AB /* Pickers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Pickers.swift"; sourceTree = "<group>"; };
 		B503598C3C0D3A574333D1D6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets.xcassets"; sourceTree = "<group>"; };
 		F03759565B94F24A35F38012 /* IconSwiss@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconSwiss@2x.png"; sourceTree = "<group>"; };
@@ -69,9 +62,6 @@
 		770C5B730A8FBE3C009C5372 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
 		3F81D76A7907C7EB99225437 /* TokenUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TokenUsage.swift"; sourceTree = "<group>"; };
 		80C4B270D8C947F283B45797 /* GitHubClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GitHubClient.swift"; sourceTree = "<group>"; };
-		27D9338DABB8705AD8964E77 /* SiriOrbView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SiriOrbView.swift"; sourceTree = "<group>"; };
-		6CF1E92A5C36400F4A733A34 /* SiriVoiceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SiriVoiceSettingsView.swift"; sourceTree = "<group>"; };
-		75D400C12DD98D5B2EDA32F7 /* SiriHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SiriHomeView.swift"; sourceTree = "<group>"; };
 		3F075E26C60C72E8466FDEE2 /* TokenUsageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TokenUsageView.swift"; sourceTree = "<group>"; };
 		FAC26C798CE1869FC85BAFF0 /* WebSourceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebSourceView.swift"; sourceTree = "<group>"; };
 		E19CFC911C5EEF05C028818B /* ConnectivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConnectivityView.swift"; sourceTree = "<group>"; };
@@ -103,7 +93,6 @@
 				66FD2A1109E4240E5F700D2D /* KeychainStore.swift */,
 				60A3332900E007291C4D2501 /* APIClient.swift */,
 				72612619AFEA3F28D48495FE /* ChatViewModel.swift */,
-				745FD85DB68E9BD7080BA4E6 /* SpeechService.swift */,
 				61363FBBF40DADEDAA717D84 /* MediaService.swift */,
 				FB9111ED4C6C84430991C974 /* SourceExtractor.swift */,
 				DB501B1834DA052B65309C17 /* MemoryService.swift */,
@@ -126,12 +115,8 @@
 				800DBCEA696385250E8402FF /* ChatView.swift */,
 				D71C48FDF9994411CDA7BB02 /* APIKeyView.swift */,
 				4F744F6D6EBF1B44CEF76CC1 /* SettingsView.swift */,
-				83FB7BE52629566AC31847EA /* VoiceModeView.swift */,
 				4B46BC5DFD3B65EDC5B8D9AB /* Pickers.swift */,
-							27D9338DABB8705AD8964E77 /* SiriOrbView.swift */,
-				6CF1E92A5C36400F4A733A34 /* SiriVoiceSettingsView.swift */,
-				75D400C12DD98D5B2EDA32F7 /* SiriHomeView.swift */,
-				3F075E26C60C72E8466FDEE2 /* TokenUsageView.swift */,
+							3F075E26C60C72E8466FDEE2 /* TokenUsageView.swift */,
 				FAC26C798CE1869FC85BAFF0 /* WebSourceView.swift */,
 				E19CFC911C5EEF05C028818B /* ConnectivityView.swift */,
 				824DEAD4FAA2BFB7DC1CC81B /* GitHubRepoView.swift */,
@@ -236,7 +221,6 @@
 				FD5C1E28C54839A54F0BF063 /* KeychainStore.swift in Sources */,
 				E8F54F3AAEAE2429B84E4829 /* APIClient.swift in Sources */,
 				631E43E6F615B849A1268CB8 /* ChatViewModel.swift in Sources */,
-				2A80FC988C73DEFBEF28ECA0 /* SpeechService.swift in Sources */,
 				C0129ACCD92E3FE44AD6123E /* MediaService.swift in Sources */,
 				634A9FA4EA04A6EB2257BD34 /* SourceExtractor.swift in Sources */,
 				76074D6502CB454A1E32F4B7 /* MemoryService.swift in Sources */,
@@ -246,13 +230,9 @@
 				D4F70AFAB7165E01BF46C059 /* ChatView.swift in Sources */,
 				07816E666B4D5F9D87D1BB0F /* APIKeyView.swift in Sources */,
 				51FF16094E9177729A7DB4D8 /* SettingsView.swift in Sources */,
-				B68517248C6885107070A70D /* VoiceModeView.swift in Sources */,
 				CF36437D58F517D454213F05 /* Pickers.swift in Sources */,
 							EB89A93AA92217127A8DB7B6 /* TokenUsage.swift in Sources */,
 				51BEC7E343715065C00D5370 /* GitHubClient.swift in Sources */,
-				8627A9539666D4FC2E04A2F5 /* SiriOrbView.swift in Sources */,
-				213E18AFE9BEDBB98FE730D9 /* SiriVoiceSettingsView.swift in Sources */,
-				0E703036D9138ADAB225C218 /* SiriHomeView.swift in Sources */,
 				931E526F06A9600B4AADBE6C /* TokenUsageView.swift in Sources */,
 				5058E687AA896C2876C126BF /* WebSourceView.swift in Sources */,
 				0C4B03A4A8733E0B7E8702AB /* ConnectivityView.swift in Sources */,

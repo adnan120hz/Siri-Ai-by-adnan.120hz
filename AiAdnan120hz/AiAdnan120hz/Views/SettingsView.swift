@@ -28,33 +28,15 @@ struct SettingsView: View {
                 }
 
                 Section(header: Text("Model")) {
-                    HStack {
-                        Text("Akun:")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                        Text(appState.accountTier == .paid ? "Paid account" : appState.accountTier == .free ? "Free account" : "Belum terdeteksi")
-                            .font(.subheadline).bold()
-                            .foregroundStyle(appState.accountTier == .paid ? .green : appState.accountTier == .free ? .orange : .secondary)
-                        Spacer()
-                        if appState.accountTier == .free {
-                            Text("Model paid terkunci")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
+                    Text("Semua model di bawah ini gratis (free).")
+                        .font(.footnote).foregroundStyle(.secondary)
                     if appState.availableModels.isEmpty {
                         Text("Daftar model kosong. Muat ulang untuk mengambil dari apinex.bond.")
                             .font(.footnote).foregroundStyle(.secondary)
                     } else {
                         Picker("Model bawaan", selection: $appState.defaultModelId) {
                             ForEach(appState.availableModels, id: \.self) { m in
-                                let locked = appState.accountTier == .free && !APInexClient.isFreeModel(m)
-                                HStack {
-                                    Text(m)
-                                    if locked {
-                                        Text("· Paid").foregroundStyle(.secondary)
-                                    }
-                                }
-                                .tag(m)
-                                .disabled(locked)
+                                Text(m).tag(m)
                             }
                         }
                     }
@@ -137,9 +119,7 @@ struct SettingsView: View {
                 }
 
                 Section(header: Text("Tentang")) {
-                    Text("Siri Ai 1.0 — chat AI lewat API key apinex.bond milikmu. Tanpa akun, tanpa login.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    Text("Mode Suara = loop STT → AI → TTS on-device, bukan realtime duplex.")
+                    Text("ai adnan.120hz 1.0 — chat AI lewat API key apinex.bond milikmu. Tanpa akun, tanpa login.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
@@ -194,13 +174,13 @@ struct SettingsView: View {
         modelsMessage = nil
         Task { @MainActor in
             do {
-                let models = try await APInexClient.fetchModels(apiKey: key)
+                let models = try await APInexClient.fetchFreeModels(apiKey: key)
                 await MainActor.run {
                     appState.availableModels = models
-                    if appState.defaultModelId.isEmpty, let first = models.first {
-                        appState.defaultModelId = first
+                    if !models.contains(appState.defaultModelId) {
+                        appState.defaultModelId = models.first ?? ""
                     }
-                    modelsMessage = "\(models.count) model ditemukan."
+                    modelsMessage = "\(models.count) model free ditemukan."
                     loadingModels = false
                 }
             } catch {

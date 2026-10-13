@@ -35,7 +35,7 @@ struct TokenUsageView: View {
         .onAppear {
             used = TokenUsage.usedToday()
             timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
-                used = TokenUsage.usedToday()
+                Task { @MainActor in used = TokenUsage.usedToday() }
             }
         }
         .onDisappear {
