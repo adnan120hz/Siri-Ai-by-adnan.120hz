@@ -16,7 +16,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("API Key") {
+                Section(header: Text("API Key")) {
                     HStack {
                         Image(systemName: appState.hasAPIKey ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .foregroundStyle(appState.hasAPIKey ? .green : .red)
@@ -27,7 +27,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Model") {
+                Section(header: Text("Model")) {
                     HStack {
                         Text("Akun:")
                             .font(.subheadline).foregroundStyle(.secondary)
@@ -67,7 +67,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Tampilan") {
+                Section(header: Text("Tampilan")) {
                     Picker("Mode", selection: $appState.appearanceMode) {
                         Text("Sistem").tag("system")
                         Text("Gelap").tag("dark")
@@ -76,7 +76,7 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section("Kuota Token") {
+                Section(header: Text("Kuota Token")) {
                     TokenUsageView()
                 }
 
@@ -88,7 +88,7 @@ struct SettingsView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
 
-                Section("Ingatan") {
+                Section(header: Text("Ingatan")) {
                     Toggle("Ingatan AI", isOn: $appState.memoryEnabled)
                     Text("Ingatan 100% lokal di HP ini (bukan cloud). AI merangkum obrolan dan menyimpan fakta tentangmu untuk dipakai di prompt berikutnya.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -120,7 +120,7 @@ struct SettingsView: View {
                     Text("Ingatan")
                 }
 
-                Section("Penyimpanan lokal") {
+                Section(header: Text("Penyimpanan lokal")) {
                     ProgressView(value: storageRatio)
                     Text("\(storageText) / 25 GB")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -130,7 +130,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Icon aplikasi") {
+                Section(header: Text("Icon aplikasi")) {
                     iconRow(name: "", title: "Utama — Navy 120hz", file: nil)
                     iconRow(name: "IconSwiss", title: "Hitam — Swiss", file: "IconSwiss@3x")
                     iconRow(name: "IconCream", title: "Krem — Editorial", file: "IconCream@3x")
@@ -138,7 +138,7 @@ struct SettingsView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
 
-                Section("Tentang") {
+                Section(header: Text("Tentang")) {
                     Text("Siri Ai 1.0 — chat AI lewat API key apinex.bond milikmu. Tanpa akun, tanpa login.")
                         .font(.footnote).foregroundStyle(.secondary)
                     Text("Mode Suara = loop STT → AI → TTS on-device, bukan realtime duplex.")

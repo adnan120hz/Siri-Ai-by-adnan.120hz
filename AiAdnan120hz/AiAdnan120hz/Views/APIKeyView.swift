@@ -31,7 +31,7 @@ struct APIKeyView: View {
                 }
 
                 if appState.hasAPIKey {
-                    Section("Status") {
+                    Section(header: Text("Status")) {
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
