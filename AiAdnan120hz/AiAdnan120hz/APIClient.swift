@@ -147,6 +147,31 @@ struct APInexClient {
                 required: ["repo", "path"]
             )
         )),
+        ToolDef(function: FunctionDef(
+            name: "github_write_file",
+            description: "Buat file baru atau ubah isi file di repository, langsung auto-commit via GitHub Contents API (sama seperti edit di github.com). PENTING: JANGAN panggil tool ini tanpa persetujuan eksplisit user — tanya dulu di chat: sebutkan file yang akan diubah dan pesan commitnya, tunggu user bilang ya/setuju.",
+            parameters: ParamSchema(
+                properties: [
+                    "repo": PropSchema(type: "string", description: "Nama repo format 'owner/nama'"),
+                    "path": PropSchema(type: "string", description: "Path file dalam repo, mis. 'README.md' atau 'src/App.swift'"),
+                    "content": PropSchema(type: "string", description: "Isi LENGKAP file (teks). Untuk edit, baca dulu file-nya lalu kirim versi lengkap yang sudah diubah."),
+                    "message": PropSchema(type: "string", description: "Pesan commit, mis. 'Update README'"),
+                ],
+                required: ["repo", "path", "content"]
+            )
+        )),
+        ToolDef(function: FunctionDef(
+            name: "github_delete_file",
+            description: "Hapus file dari repository, langsung auto-commit via GitHub Contents API. PENTING: JANGAN panggil tool ini tanpa persetujuan eksplisit user — tanya dulu di chat dan tunggu user bilang ya/setuju.",
+            parameters: ParamSchema(
+                properties: [
+                    "repo": PropSchema(type: "string", description: "Nama repo format 'owner/nama'"),
+                    "path": PropSchema(type: "string", description: "Path file dalam repo yang akan dihapus"),
+                    "message": PropSchema(type: "string", description: "Pesan commit, mis. 'Hapus file lama'"),
+                ],
+                required: ["repo", "path"]
+            )
+        )),
     ]
 
     struct APIMessage: Encodable {

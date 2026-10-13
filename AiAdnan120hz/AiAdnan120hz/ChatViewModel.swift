@@ -267,9 +267,16 @@ final class ChatViewModel: ObservableObject {
             - github_list_repos → daftar semua repo user
             - github_list_files(repo, path_prefix opsional) → daftar file dalam repo (repo format "owner/nama")
             - github_read_file(repo, path) → baca isi file teks
+            - github_write_file(repo, path, content, message) → BUAT/EDIT file + auto-commit ke GitHub
+            - github_delete_file(repo, path, message) → HAPUS file + auto-commit ke GitHub
             Aturan: kalau user bertanya tentang GitHub / repo / kode ("bisa konek github?", "list repo", \
             "bacakan file ..."), WAJIB pakai tools untuk menjawab dengan data nyata — buktikan, jangan \
-            bilang tidak bisa. Kalau tools tidak tersedia di model ini, arahkan user ke Pengaturan → \
+            bilang tidak bisa. Tool baca (list/read) boleh langsung dipakai.
+            Aturan TULIS/HAPUS (wajib dipatuhi): SEBELUM memanggil github_write_file / github_delete_file, \
+            tanya dulu ke user di chat — sebutkan file apa yang akan diubah/dihapus dan pesan commit yang \
+            akan dipakai, lalu tunggu user bilang ya/setuju (mis. "mau gua commit dengan pesan X?"). JANGAN \
+            pernah panggil tool tulis/hapus tanpa persetujuan eksplisit user.
+            Kalau tools tidak tersedia di model ini, arahkan user ke Pengaturan → \
             Konektivitas → GitHub (tetap jangan minta token di chat).
             """
         }

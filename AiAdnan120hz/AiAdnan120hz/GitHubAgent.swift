@@ -31,6 +31,29 @@ enum GitHubAgent {
                     return "Parameter 'repo' dan 'path' wajib."
                 }
                 return try await readFile(token: token, repo: repo, path: path)
+            case "github_write_file":
+                guard let repo = args["repo"], !repo.isEmpty,
+                      let path = args["path"], !path.isEmpty,
+                      let content = args["content"] else {
+                    return "Parameter 'repo', 'path', dan 'content' wajib."
+                }
+                let message: String = {
+                    if let m = args["message"], !m.isEmpty { return m }
+                    return "Update \(path) via ai adnan.120hz"
+                }()
+                return try await writeFile(token: token, repo: repo, path: path,
+                                           content: content, message: message)
+            case "github_delete_file":
+                guard let repo = args["repo"], !repo.isEmpty,
+                      let path = args["path"], !path.isEmpty else {
+                    return "Parameter 'repo' dan 'path' wajib."
+                }
+                let delMessage: String = {
+                    if let m = args["message"], !m.isEmpty { return m }
+                    return "Hapus \(path) via ai adnan.120hz"
+                }()
+                return try await deleteFile(token: token, repo: repo, path: path,
+                                            message: delMessage)
             default:
                 return "Tool tidak dikenal: \(name)."
             }
@@ -82,6 +105,44 @@ enum GitHubAgent {
         let text = try await GitHubClient.rawFile(token: token, repo: repo,
                                                   branch: branch, path: path)
         return "Isi \(path) @ \(repo):\n\(text.prefix(8000))"
+    }
+
+    /// Batas Contents API: file >1MB tidak bisa dikelola lewat endpoint ini.
+    private static let maxWriteBytes = 900_000
+
+    private static func writeFile(token: String, repo: String, path: String,
+                                  content: String, message: String) async throws -> String {
+        guard content.utf8.count <= maxWriteBytes else {
+            return "File terlalu besar (\(content.utf8.count) bytes, batas ~900KB untuk Contents API). " +
+                "Pecah jadi beberapa file atau edit manual."
+        }
+        // Kalau file sudah ada → butuh SHA untuk update; kalau 404 → buat baru.
+        var sha: String? = nil
+        var isNew = true
+        do {
+            sha = try await GitHubClient.getFileSHA(token: token, repo: repo, path: path)
+            isNew = false
+        } catch GitHubError.notFound {
+            isNew = true
+        }
+        let commit = try await GitHubClient.writeFile(token: token, repo: repo, path: path,
+                                                      content: content, message: message,
+                                                      sha: sha)
+        let aksi = isNew ? "dibuat" : "diupdate"
+        return "OK: \(path) \(aksi) di \(repo) (commit \(commit.prefix(7)))."
+    }
+
+    private static func deleteFile(token: String, repo: String, path: String,
+                                   message: String) async throws -> String {
+        let sha: String
+        do {
+            sha = try await GitHubClient.getFileSHA(token: token, repo: repo, path: path)
+        } catch GitHubError.notFound {
+            return "File \(path) tidak ditemukan di \(repo) — tidak ada yang dihapus."
+        }
+        let commit = try await GitHubClient.deleteFile(token: token, repo: repo, path: path,
+                                                       sha: sha, message: message)
+        return "OK: \(path) dihapus dari \(repo) (commit \(commit.prefix(7)))."
     }
 
     // MARK: - Util

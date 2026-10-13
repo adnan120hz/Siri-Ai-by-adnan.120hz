@@ -81,7 +81,6 @@ enum GitHubError: LocalizedError {
 }
 
 struct GitHubClient {
-    static let apiBase = URL(string: "https://api.github.com")!
 
     struct User: Decodable { var login: String; var name: String? }
     struct Repo: Decodable, Identifiable {
@@ -97,8 +96,23 @@ struct GitHubClient {
         var truncated: Bool?
     }
 
-    private static func get<T: Decodable>(_ path: String, token: String) async throws -> T {
-        var req = URLRequest(url: apiBase.appendingPathComponent(path))
+    /// Bangun URL API dengan query yang di-encode benar.
+    /// (appendingPathComponent meng-encode "?" sehingga query inline rusak —
+    ///  bug ini sebelumnya membuat per_page/sort/recursive diabaikan server.)
+    private static func apiURL(path: String, query: [String: String] = [:]) -> URL? {
+        var comp = URLComponents(string: "https://api.github.com")
+        comp?.path = "/" + path
+        if !query.isEmpty {
+            comp?.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+        }
+        return comp?.url
+    }
+
+    private static func get<T: Decodable>(path: String, query: [String: String] = [:], token: String) async throws -> T {
+        guard let url = apiURL(path: path, query: query) else {
+            throw GitHubError.decoding("URL tidak valid: \(path)")
+        }
+        var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
@@ -122,12 +136,14 @@ struct GitHubClient {
     }
 
     static func validate(token: String) async throws -> User {
-        try await get("user", token: token)
+        try await get(path: "user", token: token)
     }
 
     static func repos(token: String) async throws -> [Repo] {
         do {
-            return try await get("user/repos?per_page=100&sort=updated", token: token)
+            return try await get(path: "user/repos",
+                                 query: ["per_page": "100", "sort": "updated"],
+                                 token: token)
         } catch GitHubError.http(let s, _) where s == 404 {
             // Fine-grained PAT tanpa akses repository → GitHub balas 404 (bukan 403).
             throw GitHubError.noRepoAccess
@@ -136,7 +152,9 @@ struct GitHubClient {
 
     static func tree(token: String, repo: String, branch: String) async throws -> [Tree.Entry] {
         do {
-            let t: Tree = try await get("repos/\(repo)/git/trees/\(branch)?recursive=1", token: token)
+            let t: Tree = try await get(path: "repos/\(repo)/git/trees/\(branch)",
+                                        query: ["recursive": "1"],
+                                        token: token)
             return t.tree.filter { $0.type == "blob" }
         } catch GitHubError.http(let s, _) where s == 404 {
             throw GitHubError.notFound("repo \(repo)")
@@ -145,7 +163,11 @@ struct GitHubClient {
 
     /// Ambil isi file mentah via raw.githubusercontent.com
     static func rawFile(token: String, repo: String, branch: String, path: String) async throws -> String {
-        var req = URLRequest(url: URL(string: "https://raw.githubusercontent.com/\(repo)/\(branch)/\(path)")!)
+        let encodedPath = encodePath(path)
+        guard let url = URL(string: "https://raw.githubusercontent.com/\(repo)/\(branch)/\(encodedPath)") else {
+            throw GitHubError.decoding("Path tidak valid: \(path)")
+        }
+        var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue(APInexClient.userAgent, forHTTPHeaderField: "User-Agent")
@@ -165,6 +187,129 @@ struct GitHubClient {
             throw GitHubError.decoding("File kosong / bukan teks.")
         }
         return String(text.prefix(SourceExtractor.maxChars))
+    }
+
+    // MARK: - Contents API (tulis): dipakai github.com web editor juga.
+
+    struct ContentItem: Decodable {
+        var sha: String
+        var type: String?
+    }
+
+    struct ContentWriteResponse: Decodable {
+        struct CommitInfo: Decodable { var sha: String? }
+        var content: ContentItem?
+        var commit: CommitInfo?
+    }
+
+    /// Encode tiap segmen path (spasi/karakter khusus di nama file tidak boleh merusak URL).
+    private static func encodePath(_ path: String) -> String {
+        path.split(separator: "/").map {
+            $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0)
+        }.joined(separator: "/")
+    }
+
+    private static func contentsURL(repo: String, path: String) -> URL? {
+        URL(string: "https://api.github.com/repos/\(repo)/contents/\(encodePath(path))")
+    }
+
+    /// Request JSON umum untuk PUT/DELETE (dan GET tanpa body).
+    private static func sendJSON<Res: Decodable>(method: String, url: URL, token: String,
+                                                jsonBody: Data?,
+                                                okStatuses: Set<Int>) async throws -> Res {
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        req.setValue(APInexClient.userAgent, forHTTPHeaderField: "User-Agent")
+        req.timeoutInterval = 30
+        if let jsonBody {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = jsonBody
+        }
+        let data: Data
+        let status: Int
+        do {
+            let (d, response) = try await URLSession.shared.data(for: req)
+            data = d
+            status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        } catch let e as URLError {
+            throw GitHubError.network(e)
+        }
+        guard okStatuses.contains(status) else {
+            if status == 404 { throw GitHubError.notFound("path di repo") }
+            if status == 409 {
+                throw GitHubError.http(status, "Konflik SHA — file berubah di server. Baca ulang dulu lalu coba lagi.")
+            }
+            if status == 422 {
+                throw GitHubError.http(status, "Validasi gagal: \(String(data: data, encoding: .utf8) ?? "")")
+            }
+            throw GitHubError.http(status, String(data: data, encoding: .utf8) ?? "")
+        }
+        do {
+            return try JSONDecoder().decode(Res.self, from: data)
+        } catch {
+            throw GitHubError.decoding(error.localizedDescription)
+        }
+    }
+
+    /// Ambil SHA blob file — wajib untuk update/delete. Throw notFound kalau tidak ada.
+    static func getFileSHA(token: String, repo: String, path: String) async throws -> String {
+        guard let url = contentsURL(repo: repo, path: path) else {
+            throw GitHubError.decoding("Path tidak valid: \(path)")
+        }
+        do {
+            let item: ContentItem = try await sendJSON(method: "GET", url: url,
+                                                       token: token, jsonBody: nil,
+                                                       okStatuses: [200])
+            return item.sha
+        } catch GitHubError.notFound {
+            throw GitHubError.notFound("file \(path) di \(repo)")
+        }
+    }
+
+    /// Buat file baru (sha nil) atau update file (sha dari getFileSHA).
+    /// Mengembalikan SHA commit. Isi dikirim sebagai base64 sesuai API.
+    static func writeFile(token: String, repo: String, path: String,
+                          content: String, message: String, sha: String?) async throws -> String {
+        guard let url = contentsURL(repo: repo, path: path) else {
+            throw GitHubError.decoding("Path tidak valid: \(path)")
+        }
+        struct Body: Encodable {
+            var message: String
+            var content: String  // base64
+            var sha: String?     // nil = buat baru (key di-omit, bukan null)
+            enum CodingKeys: String, CodingKey { case message, content, sha }
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(message, forKey: .message)
+                try c.encode(content, forKey: .content)
+                try c.encodeIfPresent(sha, forKey: .sha)
+            }
+        }
+        let body = Body(message: message,
+                        content: Data(content.utf8).base64EncodedString(),
+                        sha: sha)
+        let bodyData = try JSONEncoder().encode(body)
+        let res: ContentWriteResponse = try await sendJSON(method: "PUT", url: url,
+                                                           token: token, jsonBody: bodyData,
+                                                           okStatuses: [200, 201])
+        return res.commit?.sha ?? res.content?.sha ?? "?"
+    }
+
+    /// Hapus file. `sha` wajib — ambil via getFileSHA dulu.
+    /// Mengembalikan SHA commit.
+    static func deleteFile(token: String, repo: String, path: String,
+                           sha: String, message: String) async throws -> String {
+        guard let url = contentsURL(repo: repo, path: path) else {
+            throw GitHubError.decoding("Path tidak valid: \(path)")
+        }
+        struct Body: Encodable { var message: String; var sha: String }
+        let bodyData = try JSONEncoder().encode(Body(message: message, sha: sha))
+        let res: ContentWriteResponse = try await sendJSON(method: "DELETE", url: url,
+                                                           token: token, jsonBody: bodyData,
+                                                           okStatuses: [200])
+        return res.commit?.sha ?? "?"
     }
 }
 
