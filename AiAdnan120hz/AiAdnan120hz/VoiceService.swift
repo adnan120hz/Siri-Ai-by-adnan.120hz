@@ -2,12 +2,11 @@ import Foundation
 import AVFoundation
 import Speech
 
-// MARK: - Voice: speech-to-text beneran (SFSpeechRecognizer + AVAudioEngine)
+// MARK: - Voice: speech-to-text beneran (AVAudioRecorder → SFSpeechURLRecognitionRequest)
 // dan text-to-speech beneran (AVSpeechSynthesizer). Bukan stub, bukan local fake.
 //
-// Catatan crash-fix: installTap AVAudioEngine melempar NSException (tidak bisa
-// di-catch Swift) kalau format input invalid (0 channel). Semua state berbahaya
-// di-guard sebelum menyentuh audio engine — error jadi alert, bukan crash.
+// TIDAK pakai AVAudioEngine.installTap — rawan NSException (tidak bisa di-catch Swift)
+// yang bikin force close. Rekam ke file .m4a dulu, lalu transcribe file.
 
 @MainActor
 final class VoiceService: ObservableObject {
@@ -16,11 +15,14 @@ final class VoiceService: ObservableObject {
     @Published var permissionError: String?
 
     private var recognizer: SFSpeechRecognizer?
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
-    private let audioEngine = AVAudioEngine()
+    private var audioRecorder: AVAudioRecorder?
 
     private let synthesizer = AVSpeechSynthesizer()
+
+    private var recordingURL: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("voice_input.m4a")
+    }
 
     // MARK: - Izin
 
@@ -60,114 +62,100 @@ final class VoiceService: ObservableObject {
         return true
     }
 
-    // MARK: - Speech-to-text
+    // MARK: - Speech-to-text (via AVAudioRecorder → file → SFSpeechURLRecognitionRequest)
+    //
+    // TIDAK pakai AVAudioEngine.installTap — rawan NSException (tidak bisa di-catch Swift).
+    // Rekam ke file .m4a, lalu transcribe file. Jauh lebih stabil.
 
-    /// Mulai merekam. Hasil partial/full masuk ke `transcript` (dipakai view untuk isi text field).
-    /// Semua failure path mengisi `permissionError` (jadi alert) — tidak ada yang crash.
+    /// Mulai merekam. Hasil masuk ke `transcript` setelah stop.
     func startRecording() async {
         guard !isRecording else { return }
 
-        // Guard 1: jangan mulai kalau izin mic belum granted (tanpa ini, inputNode bisa crash).
+        // Guard 1: izin mic + speech.
         if AVAudioSession.sharedInstance().recordPermission != .granted {
             guard await requestPermissions() else { return }
         } else {
-            // Mic sudah granted, tapi speech recognition belum tentu.
             let s = SFSpeechRecognizer.authorizationStatus()
             if s != .authorized {
                 guard await requestPermissions() else { return }
             }
         }
 
-        // Batalkan task + matikan engine lama sampai bersih sebelum mulai yang baru.
-        fullStopAudio()
-
-        // Guard 2: locale harus didukung perangkat.
+        // Guard 2: locale.
         let locale = Locale(identifier: "id-ID")
         if SFSpeechRecognizer.supportedLocales().contains(locale) {
             recognizer = SFSpeechRecognizer(locale: locale)
         } else {
-            recognizer = SFSpeechRecognizer() // fallback locale sistem
+            recognizer = SFSpeechRecognizer()
         }
         guard let recognizer, recognizer.isAvailable else {
             permissionError = "Speech recognizer tidak tersedia saat ini (butuh internet)."
             return
         }
 
-        // Guard 3: siapkan audio session dulu — KATEGORI PLAYANDRECORD + AKTIF
-        // SEBELUM sentuh inputNode. Akses inputNode saat session belum siap
-        // bisa melempar NSException (tidak bisa di-catch Swift) → crash.
+        // Guard 3: audio session.
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
+            try session.setCategory(.playAndRecord, mode: .default, options: [.duckOthers, .defaultToSpeaker])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             permissionError = "Gagal menyiapkan audio: \(error.localizedDescription)"
             return
         }
 
-        // Guard 4 (ANTI-CRASH): format input harus valid SEBELUM installTap.
-        // installTap dengan format 0-channel melempar NSException → force close.
-        // Session sudah .playAndRecord + aktif (Guard 3) sebelum sentuh inputNode.
-        let inputNode = audioEngine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
-        guard format.channelCount > 0, format.sampleRate > 0 else {
-            permissionError = "Input audio tidak tersedia (cek mikrofon / sambungan headset)."
+        // Hapus file lama kalau ada.
+        try? FileManager.default.removeItem(at: recordingURL)
+
+        // Guard 4: buat recorder.
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
+        do {
+            audioRecorder = try AVAudioRecorder(url: recordingURL, settings: settings)
+        } catch {
+            permissionError = "Gagal mulai merekam: \(error.localizedDescription)"
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            return
+        }
+
+        guard let recorder = audioRecorder, recorder.record() else {
+            permissionError = "Gagal mulai merekam."
+            audioRecorder = nil
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             return
         }
 
         transcript = ""
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        self.recognitionRequest = request
-
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak request] buffer, _ in
-            request?.append(buffer)
-        }
-        audioEngine.prepare()
-        do {
-            try audioEngine.start()
-        } catch {
-            fullStopAudio()
-            permissionError = "Gagal mulai merekam: \(error.localizedDescription)"
-            return
-        }
-
         isRecording = true
+    }
+
+    func stopRecording() {
+        guard isRecording else { return }
+        isRecording = false
+        audioRecorder?.stop()
+        audioRecorder = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+
+        // Transcribe file yang baru direkam.
+        guard let recognizer else { return }
+        let request = SFSpeechURLRecognitionRequest(url: recordingURL)
+        request.shouldReportPartialResults = false
+        recognitionTask?.cancel()
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if let result {
                     self.transcript = result.bestTranscription.formattedString
                 }
-                // Berhenti otomatis saat hasil final atau error.
-                if error != nil || (result?.isFinal ?? false) {
-                    self.stopRecording()
+                if error != nil {
+                    // Diam — transcript tetap kosong, user bisa ketik manual.
                 }
+                self.recognitionTask = nil
             }
         }
-    }
-
-    func stopRecording() {
-        guard isRecording else { return }
-        isRecording = false
-        recognitionRequest?.endAudio()
-        recognitionTask?.cancel()
-        recognitionTask = nil
-        recognitionRequest = nil
-        fullStopAudio()
-        // Kembalikan audio session agar TTS / audio lain jalan normal.
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    }
-
-    /// Matikan engine sampai bersih: stop + hapus tap SELALU (bukan cuma saat running),
-    /// supaya tidak ada tap ganda yang memicu NSException di start berikutnya.
-    private func fullStopAudio() {
-        if audioEngine.isRunning {
-            audioEngine.stop()
-        }
-        audioEngine.inputNode.removeTap(onBus: 0)
-        audioEngine.reset()
     }
 
     // MARK: - Text-to-speech

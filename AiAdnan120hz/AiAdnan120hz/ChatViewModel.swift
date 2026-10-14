@@ -48,6 +48,10 @@ final class ChatViewModel: ObservableObject {
             conversation.modelId = "free/glm-5.3-flash"
             try? context.save()
         }
+        if conversation.modelId == "z-ai/glm-5-3-flash" {
+            conversation.modelId = "z-ai/glm-5.3-flash"
+            try? context.save()
+        }
         var modelId = conversation.modelId.isEmpty ? appState.resolvedModelId(for: provider) : conversation.modelId
         if !provider.allowsModel(modelId) {
             modelId = provider.defaultModel
@@ -138,17 +142,46 @@ final class ChatViewModel: ObservableObject {
                 do {
                     full = try await runTurn(model: currentModelId)
                 } catch let e as APIError {
-                    // NVIDIA me-list model yang belum tentu ter-deploy di akun user → 404.
-                    // Coba sekali lagi dengan model default provider sebelum menyerah.
-                    if case .http(let status, _) = e, (status == 404 || status == 400),
-                       currentModelId != taskProvider.defaultModel {
-                        print("[SiriAi] HTTP \(status) for model \(currentModelId); retrying once with default \(taskProvider.defaultModel)")
-                        currentModelId = taskProvider.defaultModel
-                        taskConversation.modelId = currentModelId
-                        try? context.save()
-                        full = try await runTurn(model: currentModelId)
+                    // KONEKSI DIPERKUAT: coba semua model yang tersedia secara berurutan.
+                    // Kalau model utama gagal (404/400/timeout), coba model lain sebelum menyerah.
+                    let candidates: [String] = {
+                        var list = [currentModelId]
+                        // Tambah model fallback provider (3 apinex + default nvidia).
+                        for m in taskProvider.modelFallback where !list.contains(m) {
+                            list.append(m)
+                        }
+                        // Tambah dari daftar server kalau ada.
+                        for m in appState.availableModels where !list.contains(m) && taskProvider.allowsModel(m) {
+                            list.append(m)
+                        }
+                        return list
+                    }()
+                    print("[SiriAi] Model \(currentModelId) gagal (\(e)); coba \(candidates.count) kandidat")
+                    var lastError = e
+                    var succeeded: String? = nil
+                    for (idx, candidate) in candidates.enumerated() {
+                        if idx == 0 { continue } // sudah dicoba di atas
+                        // Backoff: tunggu sebentar sebelum coba model lain.
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                        do {
+                            print("[SiriAi] Retry dengan model \(candidate)")
+                            let result = try await runTurn(model: candidate)
+                            // Sukses: simpan model yang work ke conversation.
+                            currentModelId = candidate
+                            taskConversation.modelId = candidate
+                            try? context.save()
+                            succeeded = result
+                            break
+                        } catch let retryError as APIError {
+                            print("[SiriAi] Model \(candidate) juga gagal: \(retryError)")
+                            lastError = retryError
+                            continue
+                        }
+                    }
+                    if let result = succeeded {
+                        full = result
                     } else {
-                        throw e
+                        throw lastError
                     }
                 }
                 print("[SiriAi] response OK (\(full.count) chars)")

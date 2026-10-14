@@ -27,7 +27,7 @@ enum AIProvider: String, CaseIterable, Identifiable {
     var defaultModel: String {
         switch self {
         case .apinex: return "free/glm-5.3-flash"
-        case .nvidia: return "z-ai/glm-5-3-flash"
+        case .nvidia: return "z-ai/glm-5.3-flash"
         }
     }
 
@@ -35,7 +35,7 @@ enum AIProvider: String, CaseIterable, Identifiable {
     var modelFallback: [String] {
         switch self {
         case .apinex: return AIClient.freeModelFallback
-        case .nvidia: return ["z-ai/glm-5-3-flash"]
+        case .nvidia: return ["z-ai/glm-5.3-flash"]
         }
     }
 
