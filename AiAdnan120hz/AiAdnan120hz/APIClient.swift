@@ -283,24 +283,11 @@ struct AIClient {
 
     // MARK: - Daftar model yang boleh dipakai (aturan per provider)
 
-    /// Daftar fallback kalau /models kosong/gagal — 16 model free apinex.bond.
+    /// Daftar fallback kalau /models kosong/gagal — hanya 3 model free pilihan user.
     static let freeModelFallback: [String] = [
         "free/glm-5.3-flash",
+        "free/glm-5.3",
         "free/deepseek-v4.1-flash",
-        "free/deepseek-v4-flash-0731",
-        "free/deepseek-v4-pro-0813",
-        "free/gpt-6-luna",
-        "free/mimo-v2.6-pro",
-        "free/mimo-v2.6-flash",
-        "free/minimax-m3.1",
-        "free/minimax-m3",
-        "free/claude-sonnet-4.6",
-        "free/claude-opus-4.6",
-        "free/muse-spark-1.3",
-        "free/gemini-3.1-pro",
-        "free/kimi-k3",
-        "free/kimi-k2.8",
-        "free/hy4",
     ]
 
     /// Ambil daftar model dari server, saring sesuai aturan provider.

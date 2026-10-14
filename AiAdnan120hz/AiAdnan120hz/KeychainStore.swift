@@ -39,13 +39,14 @@ enum AIProvider: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Aturan model yang boleh dipakai. APInex: hanya model free (prefix "free/").
+    /// Aturan model yang boleh dipakai. APInex: hanya 3 model pilihan user.
     /// NVIDIA NIM: semua model yang dikembalikan /models boleh dipakai.
     func allowsModel(_ id: String) -> Bool {
         let t = id.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return false }
         switch self {
-        case .apinex: return t.lowercased().hasPrefix("free/")
+        case .apinex:
+            return AIClient.freeModelFallback.contains(t)
         case .nvidia: return true
         }
     }
