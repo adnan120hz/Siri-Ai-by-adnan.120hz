@@ -1,0 +1,56 @@
+name: Screenshot Simulator
+
+# Takes screenshots of Siri Ai in iOS Simulator via CI.
+# Trigger: workflow_dispatch (manual) — user explicitly requested this.
+on:
+  workflow_dispatch:
+
+jobs:
+  screenshot:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.6'
+
+      - name: Build for simulator
+        run: |
+          xcodebuild -project AiAdnan120hz/AiAdnan120hz.xcodeproj \
+            -scheme AiAdnan120hz \
+            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
+            -derivedDataPath ./DerivedData \
+            build 2>&1 | tail -20
+
+      - name: Boot simulator and install app
+        run: |
+          SIM=$(xcrun simctl list devices available | grep "iPhone 17" | head -1 | grep -oE '[A-F0-9-]{36}' | head -1)
+          echo "SIM=$SIM" >> $GITHUB_ENV
+          xcrun simctl boot "$SIM" || true
+          sleep 10
+          APP_PATH=$(find ./DerivedData -name "AiAdnan120hz.app" | head -1)
+          echo "APP=$APP_PATH" >> $GITHUB_ENV
+          xcrun simctl install "$SIM" "$APP_PATH"
+
+      - name: Launch and screenshot
+        run: |
+          mkdir -p screenshots
+          # Launch app
+          xcrun simctl launch "$SIM" com.adnan120hz.aiadnan120hz
+          sleep 8
+          # Screenshot 1: history/empty state
+          xcrun simctl io "$SIM" screenshot screenshots/01-history.png
+          sleep 2
+          # Screenshot 2: after a moment (same screen, stability check)
+          xcrun simctl io "$SIM" screenshot screenshots/02-main.png
+          ls -lh screenshots/
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiriAi-screenshots
+          path: screenshots/
