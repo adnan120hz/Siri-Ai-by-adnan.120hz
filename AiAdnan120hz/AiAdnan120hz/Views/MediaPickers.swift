@@ -71,7 +71,12 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
                     let provider = r.itemProvider
                     if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
                         // Video → extract frames so the AI can "see" it.
-                        if let url = try? await provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) {
+                        let url: URL? = await withCheckedContinuation { cont in
+                            _ = provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { u, _ in
+                                cont.resume(returning: u)
+                            }
+                        }
+                        if let url {
                             let frames = await MediaService.extractFrames(from: url)
                             datas.append(contentsOf: frames)
                         }
