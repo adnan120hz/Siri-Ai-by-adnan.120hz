@@ -48,13 +48,8 @@ struct ConversationsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar: settings left, hamburger/checkmark right.
+            // Top bar: hamburger/checkmark right only (no gear, per reference).
             HStack {
-                SiriCircleButton(systemImage: "gearshape", imageSize: 22) {
-                    showSettings = true
-                }
-                .accessibilityLabel(Text("Settings"))
-
                 Spacer()
 
                 if mode == .select {
@@ -77,6 +72,10 @@ struct ConversationsView: View {
                             }
                         } label: {
                             Label("Select", systemImage: "checkmark.circle")
+                        }
+                        Divider()
+                        Button { showSettings = true } label: {
+                            Label("Settings", systemImage: "gearshape")
                         }
                     } label: {
                         Image(systemName: "line.3.horizontal")
@@ -448,7 +447,7 @@ struct MasonryCard: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 Text(conversation.title.isEmpty ? "New chat" : conversation.title)
-                    .font(.title3)
+                    .font(.title2)
                     .bold()
                     .lineLimit(2)
             }

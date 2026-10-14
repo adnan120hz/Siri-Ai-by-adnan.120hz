@@ -43,6 +43,11 @@ final class ChatViewModel: ObservableObject {
         }
         // Model id basi/kosong → normalisasi ke model bawaan provider aktif.
         // Pakai resolvedModelId: validasi terhadap daftar server + default.
+        // Migrasi: ID lama yang salah (strip) → ID yang benar (titik).
+        if conversation.modelId == "free/glm-5-3-flash" {
+            conversation.modelId = "free/glm-5.3-flash"
+            try? context.save()
+        }
         var modelId = conversation.modelId.isEmpty ? appState.resolvedModelId(for: provider) : conversation.modelId
         if !provider.allowsModel(modelId) {
             modelId = provider.defaultModel

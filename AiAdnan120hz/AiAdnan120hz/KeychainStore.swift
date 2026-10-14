@@ -26,7 +26,7 @@ enum AIProvider: String, CaseIterable, Identifiable {
     /// Model bawaan tiap provider.
     var defaultModel: String {
         switch self {
-        case .apinex: return "free/glm-5-3-flash"
+        case .apinex: return "free/glm-5.3-flash"
         case .nvidia: return "z-ai/glm-5-3-flash"
         }
     }

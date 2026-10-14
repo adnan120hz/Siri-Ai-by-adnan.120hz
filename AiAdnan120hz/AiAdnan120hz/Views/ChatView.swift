@@ -244,7 +244,7 @@ struct ChatView: View {
                         .font(.system(size: 22))
                         .foregroundStyle(.primary)
                         .frame(width: SiriTheme.circleButton, height: SiriTheme.circleButton)
-                        .background(Circle().fill(SiriTheme.circleFill))
+                        .background(SiriCircleGlassFill())
                         .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
             }
