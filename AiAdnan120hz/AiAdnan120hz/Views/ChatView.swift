@@ -284,9 +284,20 @@ struct ChatView: View {
                 }
                 .padding(.vertical, SiriTheme.s)
                 .background(
-                    RoundedRectangle(cornerRadius: SiriTheme.menuCorner, style: .continuous)
-                        .fill(Color(.systemBackground))
-                        .shadow(color: .black.opacity(0.15), radius: 16, y: 4)
+                    ZStack {
+                        RoundedRectangle(cornerRadius: SiriTheme.menuCorner, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                        RoundedRectangle(cornerRadius: SiriTheme.menuCorner, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.25), .white.opacity(0.05)],
+                                    startPoint: .top, endPoint: .bottom
+                                )
+                            )
+                        RoundedRectangle(cornerRadius: SiriTheme.menuCorner, style: .continuous)
+                            .strokeBorder(.white.opacity(0.4), lineWidth: 0.5)
+                    }
+                    .shadow(color: .black.opacity(0.15), radius: 16, y: 4)
                 )
                 .padding(.leading, SiriTheme.m)
                 .padding(.bottom, 92)

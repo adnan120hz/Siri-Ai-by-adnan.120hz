@@ -162,7 +162,9 @@ struct ConversationsView: View {
                             .font(.system(size: 22))
                             .foregroundStyle(selection.isEmpty ? Color.secondary : Color.white)
                             .frame(width: SiriTheme.circleButton, height: SiriTheme.circleButton)
-                            .background(Circle().fill(selection.isEmpty ? SiriTheme.circleFill : Color.red))
+                            .background(
+                                selection.isEmpty ? AnyView(SiriCircleGlassFill()) : AnyView(Circle().fill(Color.red))
+                            )
                     }
                     .buttonStyle(.plain)
                     .disabled(selection.isEmpty)
@@ -343,8 +345,19 @@ struct ConversationsView: View {
                 }
                 .frame(width: 270)
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(.systemBackground))
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.25), .white.opacity(0.05)],
+                                    startPoint: .top, endPoint: .bottom
+                                )
+                            )
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(.white.opacity(0.4), lineWidth: 0.5)
+                    }
                 )
                 .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
