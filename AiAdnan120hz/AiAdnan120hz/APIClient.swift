@@ -1,7 +1,7 @@
 import Foundation
 
 // MARK: - AIClient (OpenAI-compatible) — semua lewat URLSession, tanpa fake.
-// Mendukung dua provider: APInex dan NVIDIA NIM. Provider dipilih user di APIKeyView.
+// Mendukung dua provider: APInex dan NVIDIA NIM. Provider dipilih user di Settings.
 
 enum APIError: LocalizedError {
     case noKey

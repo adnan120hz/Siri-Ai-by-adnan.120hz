@@ -1,16 +1,18 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - Root: layar utama Siri + layar history (full screen).
+// Requires iOS 17+
 
-struct SiriRootView: View {
+// MARK: - App root: active chat + conversations browser (full screen).
+
+struct AppRoot: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject var appState: AppState
     @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
 
     @State private var activeId: UUID?
-    @State private var showHistory = false
-    /// True kalau conversation aktif dibuka dari history (tampilkan chevron < di SiriHomeView).
+    @State private var showConversations = false
+    /// True when the active chat was opened from history (shows chevron <).
     @State private var openedFromHistory = false
 
     private var activeConversation: Conversation? {
@@ -23,25 +25,29 @@ struct SiriRootView: View {
     var body: some View {
         Group {
             if let convo = activeConversation {
-                SiriHomeView(conversation: convo, showHistory: $showHistory, openedFromHistory: openedFromHistory)
+                ChatView(
+                    conversation: convo,
+                    openedFromHistory: openedFromHistory,
+                    showConversations: $showConversations
+                )
             } else {
-                // Belum ada conversation: buat satu.
-                Color(.systemBackground).ignoresSafeArea()
+                Color(.systemBackground)
+                    .ignoresSafeArea()
                     .onAppear { ensureConversation() }
             }
         }
-        .fullScreenCover(isPresented: $showHistory) {
-            HistoryView(
+        .fullScreenCover(isPresented: $showConversations) {
+            ConversationsView(
                 onSelect: { convo in
                     activeId = convo.id
                     openedFromHistory = true
-                    showHistory = false
+                    showConversations = false
                 },
                 onNewChat: {
                     let c = makeConversation()
                     activeId = c.id
                     openedFromHistory = false
-                    showHistory = false
+                    showConversations = false
                 }
             )
         }
@@ -54,16 +60,16 @@ struct SiriRootView: View {
         if let first = conversations.first {
             activeId = first.id
         } else {
-            let c = makeConversation()
-            activeId = c.id
+            activeId = makeConversation().id
         }
     }
 
     @discardableResult
     private func makeConversation() -> Conversation {
-        let provider = appState.activeProvider
-        let modelId = appState.resolvedModelId(for: provider)
-        let c = Conversation(title: "Obrolan baru", modelId: modelId)
+        let c = Conversation(
+            title: "New chat",
+            modelId: appState.resolvedModelId(for: appState.activeProvider)
+        )
         context.insert(c)
         try? context.save()
         return c
