@@ -160,6 +160,9 @@ struct SettingsView: View {
                     Text("Siri Ai — AI chat with your own API key (APInex / NVIDIA NIM). No account, no login.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                    Text("Credit: adnan.120hz")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Settings")

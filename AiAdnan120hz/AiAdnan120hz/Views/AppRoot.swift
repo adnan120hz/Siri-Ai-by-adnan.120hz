@@ -13,6 +13,8 @@ struct AppRoot: View {
     @State private var showConversations = false
     /// True when the active chat was opened from history (shows chevron <).
     @State private var openedFromHistory = false
+    /// Onboarding: tampil sekali saat pertama buka.
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
 
     private var activeConversation: Conversation? {
         if let id = activeId {
@@ -23,7 +25,11 @@ struct AppRoot: View {
 
     var body: some View {
         Group {
-            if let convo = activeConversation {
+            if !hasSeenOnboarding {
+                OnboardingView {
+                    hasSeenOnboarding = true
+                }
+            } else if let convo = activeConversation {
                 ChatView(
                     conversation: convo,
                     openedFromHistory: openedFromHistory,

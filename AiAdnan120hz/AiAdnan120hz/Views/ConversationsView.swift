@@ -80,10 +80,14 @@ struct ConversationsView: View {
                         }
                     } label: {
                         Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.primary)
-                            .frame(width: SiriTheme.circleButton, height: SiriTheme.circleButton)
-                            .background(SiriCircleGlassFill())
+                            .frame(width: 44, height: 44)
+                            .background(
+                                Circle()
+                                    .fill(.white)
+                                    .shadow(color: .black.opacity(0.06), radius: 4, y: 1)
+                            )
                     }
                     .tint(.primary)
                     .accessibilityLabel(Text("View options"))
@@ -446,9 +450,10 @@ struct MasonryCard: View {
                         )
                         Image("SiriOrb")
                             .resizable()
-                            .scaledToFit()
+                            .scaledToFill()
                             .frame(width: 72, height: 72)
-                            .opacity(0.5)
+                            .clipShape(Circle())
+                            .opacity(0.6)
                     }
                 }
             }
