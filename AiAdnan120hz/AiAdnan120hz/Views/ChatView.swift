@@ -261,13 +261,14 @@ struct ChatView: View {
 
     @ViewBuilder
     private var plusMenuOverlay: some View {
-        if showPlusMenu {
-            ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .bottomLeading) {
+            if showPlusMenu {
                 Color.black.opacity(0.001)
                     .ignoresSafeArea()
                     .onTapGesture {
                         withAnimation(SiriTheme.pop) { showPlusMenu = false }
                     }
+                    .transition(.opacity)
                 VStack(alignment: .leading, spacing: 0) {
                     plusRow(icon: "camera.fill", title: "Camera") {
                         dismissMenu()
@@ -292,12 +293,16 @@ struct ChatView: View {
                 )
                 .padding(.leading, SiriTheme.m)
                 .padding(.bottom, 92)
-                // Pop from the + button: scale from bottom-leading corner.
-                .scaleEffect(1, anchor: .bottomLeading)
-                .transition(.scale(scale: 0.85, anchor: .bottomLeading).combined(with: .opacity))
+                // Fluid bounce: scale + slight rise from the + button.
+                .transition(
+                    .scale(scale: 0.7, anchor: .bottomLeading)
+                        .combined(with: .opacity)
+                        .combined(with: .move(edge: .bottom))
+                )
             }
-            .zIndex(1)
         }
+        .zIndex(1)
+        .animation(SiriTheme.pop, value: showPlusMenu)
     }
 
     private func plusRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
