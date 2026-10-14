@@ -48,8 +48,13 @@ struct ConversationsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar: hamburger/checkmark right only (no gear, per reference).
+            // Top bar: gear (kecil) kiri, hamburger kanan. Sesuai referensi.
             HStack {
+                SiriCircleButton(systemImage: "gearshape", imageSize: 18, buttonSize: 44) {
+                    showSettings = true
+                }
+                .accessibilityLabel(Text("Settings"))
+
                 Spacer()
 
                 if mode == .select {
@@ -73,10 +78,6 @@ struct ConversationsView: View {
                         } label: {
                             Label("Select", systemImage: "checkmark.circle")
                         }
-                        Divider()
-                        Button { showSettings = true } label: {
-                            Label("Settings", systemImage: "gearshape")
-                        }
                     } label: {
                         Image(systemName: "line.3.horizontal")
                             .font(.system(size: 20, weight: .semibold))
@@ -84,6 +85,7 @@ struct ConversationsView: View {
                             .frame(width: SiriTheme.circleButton, height: SiriTheme.circleButton)
                             .background(SiriCircleGlassFill())
                     }
+                    .tint(.primary)
                     .accessibilityLabel(Text("View options"))
                 }
             }
@@ -422,19 +424,18 @@ struct MasonryCard: View {
                         .resizable()
                         .scaledToFill()
                 } else {
-                    // Placeholder yang bagus: warm neutral gradient + faint orb.
-                    // Bukan abu flat, bukan gradient ungu-biru.
+                    // Placeholder: subtle gradient + SMALL orb centered.
+                    // Jangan zoom — orb kecil di tengah, tidak memenuhi kartu.
                     ZStack {
                         LinearGradient(
-                            colors: [Color(.systemGray6), Color(.systemGray4)],
+                            colors: [Color(.systemGray6), Color(.systemGray5)],
                             startPoint: .top, endPoint: .bottom
                         )
                         Image("SiriOrb")
                             .resizable()
-                            .scaledToFill()
-                            .frame(width: 110, height: 110)
-                            .clipShape(Circle())
-                            .opacity(0.3)
+                            .scaledToFit()
+                            .frame(width: 72, height: 72)
+                            .opacity(0.5)
                     }
                 }
             }

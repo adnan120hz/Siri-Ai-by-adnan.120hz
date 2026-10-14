@@ -94,6 +94,7 @@ struct SiriPillGlassFill: View {
 struct SiriCircleButton: View {
     let systemImage: String
     var imageSize: CGFloat = 22
+    var buttonSize: CGFloat = SiriTheme.circleButton
     var action: () -> Void
 
     var body: some View {
@@ -101,7 +102,7 @@ struct SiriCircleButton: View {
             Image(systemName: systemImage)
                 .font(.system(size: imageSize, weight: .semibold))
                 .foregroundStyle(.primary)
-                .frame(width: SiriTheme.circleButton, height: SiriTheme.circleButton)
+                .frame(width: buttonSize, height: buttonSize)
                 .background(SiriCircleGlassFill())
         }
         .buttonStyle(.plain)
