@@ -150,10 +150,7 @@ struct ChatView: View {
                     .onSubmit { send() }
                     .padding(.horizontal, 18)
                     .padding(.vertical, SiriTheme.m)
-                    .background(
-                        RoundedRectangle(cornerRadius: SiriTheme.inputCorner, style: .continuous)
-                            .fill(SiriTheme.inputFill)
-                    )
+                    .background(SiriPillGlassFill())
                     .animation(SiriTheme.composerGrow, value: inputText)
 
                 rightButton

@@ -93,10 +93,12 @@ final class VoiceService: ObservableObject {
             return
         }
 
-        // Guard 3: siapkan audio session dulu.
+        // Guard 3: siapkan audio session dulu — KATEGORI PLAYANDRECORD + AKTIF
+        // SEBELUM sentuh inputNode. Akses inputNode saat session belum siap
+        // bisa melempar NSException (tidak bisa di-catch Swift) → crash.
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             permissionError = "Gagal menyiapkan audio: \(error.localizedDescription)"
@@ -105,6 +107,7 @@ final class VoiceService: ObservableObject {
 
         // Guard 4 (ANTI-CRASH): format input harus valid SEBELUM installTap.
         // installTap dengan format 0-channel melempar NSException → force close.
+        // Session sudah .playAndRecord + aktif (Guard 3) sebelum sentuh inputNode.
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
         guard format.channelCount > 0, format.sampleRate > 0 else {

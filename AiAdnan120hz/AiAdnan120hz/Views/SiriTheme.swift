@@ -41,15 +41,51 @@ enum SiriTheme {
     static let keyboard = Animation.spring(response: 0.4, dampingFraction: 0.8)
 }
 
-// MARK: - Liquid-glass circle fill (iOS 26+), flat fallback below.
+// MARK: - Liquid-glass circle fill (iOS 26+), realistic fallback below.
+//
+// Real Siri glass: blur + transparency + light reflection (sheen at top).
+// .glassEffect alone can look flat; we layer ultraThinMaterial + white
+// gradient sheen + subtle border for the real frosted-glass look.
 
 struct SiriCircleGlassFill: View {
     var body: some View {
-        if #available(iOS 26.0, *) {
-            Circle().glassEffect(.regular, in: Circle())
-        } else {
-            Circle().fill(SiriTheme.circleFill)
+        ZStack {
+            // Base blur.
+            Circle().fill(.ultraThinMaterial)
+            // Light reflection: white sheen at top, fading down.
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [.white.opacity(0.35), .white.opacity(0.05)],
+                        startPoint: .top, endPoint: .center
+                    )
+                )
+            // Subtle border for definition.
+            Circle()
+                .strokeBorder(.white.opacity(0.4), lineWidth: 0.5)
         }
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+    }
+}
+
+// MARK: - Liquid-glass pill fill (for "Ask Siri" input).
+
+struct SiriPillGlassFill: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: SiriTheme.inputCorner, style: .continuous)
+                .fill(.ultraThinMaterial)
+            RoundedRectangle(cornerRadius: SiriTheme.inputCorner, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [.white.opacity(0.3), .white.opacity(0.05)],
+                        startPoint: .top, endPoint: .center
+                    )
+                )
+            RoundedRectangle(cornerRadius: SiriTheme.inputCorner, style: .continuous)
+                .strokeBorder(.white.opacity(0.4), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
     }
 }
 
