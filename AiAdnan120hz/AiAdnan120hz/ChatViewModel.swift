@@ -30,10 +30,17 @@ final class ChatViewModel: ObservableObject {
             return
         }
         // Model id basi/kosong → normalisasi ke model bawaan provider aktif.
-        var modelId = conversation.modelId.isEmpty ? provider.defaultModel : conversation.modelId
+        // Pakai resolvedModelId: validasi terhadap daftar server + default.
+        var modelId = conversation.modelId.isEmpty ? appState.resolvedModelId(for: provider) : conversation.modelId
         if !provider.allowsModel(modelId) {
             modelId = provider.defaultModel
-            conversation.modelId = modelId
+        }
+        // Validasi tambahan: kalau model conversation tidak ada di daftar server
+        // (dan bukan default), pakai hasil resolved.
+        if !appState.availableModels.isEmpty,
+           !appState.availableModels.contains(modelId),
+           modelId != provider.defaultModel {
+            modelId = appState.resolvedModelId(for: provider)
         }
         guard !modelId.isEmpty else {
             lastError = "Belum ada model dipilih. Buka Pengaturan → Muat ulang daftar model."

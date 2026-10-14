@@ -115,7 +115,14 @@ struct APIKeyView: View {
                     appState.availableModels = models
                     let cur = appState.defaultModelId
                     if !provider.allowsModel(cur) || !models.contains(cur) {
-                        appState.defaultModelId = models.first ?? provider.defaultModel
+                        // Prefer default provider kalau ada di list (mis. NVIDIA:
+                        // z-ai/glm-5-3-flash gratis), baru fallback ke models.first.
+                        // Ini mencegah model basi yang 404 (tidak ter-deploy di akun).
+                        if models.contains(provider.defaultModel) {
+                            appState.defaultModelId = provider.defaultModel
+                        } else {
+                            appState.defaultModelId = models.first ?? provider.defaultModel
+                        }
                     }
                     message = "Key valid — \(models.count) model tersedia."
                     isError = false

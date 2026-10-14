@@ -178,6 +178,23 @@ final class AppState: ObservableObject {
         keyMasked = ""
     }
 
+    /// Model yang aman dipakai untuk provider: validasi sebelum kirim chat.
+    /// Aturan: kosong/tidak diizinkan → default. Ada di daftar server tapi tidak
+    /// dikenal → default. Ini mencegah HTTP 404 karena model basi (mis. NVIDIA
+    /// me-list model yang tidak ter-deploy di akun user).
+    func resolvedModelId(for provider: AIProvider) -> String {
+        let stored = defaultModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !stored.isEmpty, provider.allowsModel(stored) else {
+            return provider.defaultModel
+        }
+        // Kalau ada daftar dari server dan stored tidak ada di dalamnya
+        // (dan bukan default) → reset ke default.
+        if !availableModels.isEmpty, !availableModels.contains(stored), stored != provider.defaultModel {
+            return provider.defaultModel
+        }
+        return stored
+    }
+
     func hasKey(for provider: AIProvider) -> Bool {
         if let k = KeychainStore.load(for: provider), !k.isEmpty { return true }
         return false

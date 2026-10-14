@@ -4,6 +4,10 @@ import Speech
 
 // MARK: - Voice: speech-to-text beneran (SFSpeechRecognizer + AVAudioEngine)
 // dan text-to-speech beneran (AVSpeechSynthesizer). Bukan stub, bukan local fake.
+//
+// Catatan crash-fix: installTap AVAudioEngine melempar NSException (tidak bisa
+// di-catch Swift) kalau format input invalid (0 channel). Semua state berbahaya
+// di-guard sebelum menyentuh audio engine — error jadi alert, bukan crash.
 
 @MainActor
 final class VoiceService: ObservableObject {
@@ -22,6 +26,11 @@ final class VoiceService: ObservableObject {
 
     /// Minta izin microphone + speech recognition. Kembalikan true kalau keduanya granted.
     func requestPermissions() async -> Bool {
+        // Cek cepat status saat ini — kalau sudah denied, langsung alert tanpa request ulang.
+        if AVAudioSession.sharedInstance().recordPermission == .denied {
+            permissionError = "Izin mikrofon ditolak. Nyalakan di Pengaturan iPhone → Siri Ai → Mikrofon."
+            return false
+        }
         // 1. Microphone
         let micGranted = await withCheckedContinuation { cont in
             AVAudioSession.sharedInstance().requestRecordPermission { granted in
@@ -33,6 +42,11 @@ final class VoiceService: ObservableObject {
             return false
         }
         // 2. Speech recognition
+        if SFSpeechRecognizer.authorizationStatus() == .denied
+            || SFSpeechRecognizer.authorizationStatus() == .restricted {
+            permissionError = "Speech recognition dibatasi/ditolak di perangkat ini. Cek Pengaturan iPhone → Siri Ai."
+            return false
+        }
         let speechStatus = await withCheckedContinuation { cont in
             SFSpeechRecognizer.requestAuthorization { status in
                 cont.resume(returning: status)
@@ -49,19 +63,37 @@ final class VoiceService: ObservableObject {
     // MARK: - Speech-to-text
 
     /// Mulai merekam. Hasil partial/full masuk ke `transcript` (dipakai view untuk isi text field).
+    /// Semua failure path mengisi `permissionError` (jadi alert) — tidak ada yang crash.
     func startRecording() async {
         guard !isRecording else { return }
-        guard await requestPermissions() else { return }
 
-        // Batalkan task lama kalau ada.
-        stopAudioEngine()
+        // Guard 1: jangan mulai kalau izin mic belum granted (tanpa ini, inputNode bisa crash).
+        if AVAudioSession.sharedInstance().recordPermission != .granted {
+            guard await requestPermissions() else { return }
+        } else {
+            // Mic sudah granted, tapi speech recognition belum tentu.
+            let s = SFSpeechRecognizer.authorizationStatus()
+            if s != .authorized {
+                guard await requestPermissions() else { return }
+            }
+        }
 
-        recognizer = SFSpeechRecognizer(locale: Locale(identifier: "id-ID")) ?? SFSpeechRecognizer()
+        // Batalkan task + matikan engine lama sampai bersih sebelum mulai yang baru.
+        fullStopAudio()
+
+        // Guard 2: locale harus didukung perangkat.
+        let locale = Locale(identifier: "id-ID")
+        if SFSpeechRecognizer.supportedLocales().contains(locale) {
+            recognizer = SFSpeechRecognizer(locale: locale)
+        } else {
+            recognizer = SFSpeechRecognizer() // fallback locale sistem
+        }
         guard let recognizer, recognizer.isAvailable else {
             permissionError = "Speech recognizer tidak tersedia saat ini (butuh internet)."
             return
         }
 
+        // Guard 3: siapkan audio session dulu.
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
@@ -71,14 +103,21 @@ final class VoiceService: ObservableObject {
             return
         }
 
+        // Guard 4 (ANTI-CRASH): format input harus valid SEBELUM installTap.
+        // installTap dengan format 0-channel melempar NSException → force close.
+        let inputNode = audioEngine.inputNode
+        let format = inputNode.outputFormat(forBus: 0)
+        guard format.channelCount > 0, format.sampleRate > 0 else {
+            permissionError = "Input audio tidak tersedia (cek mikrofon / sambungan headset)."
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            return
+        }
+
         transcript = ""
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         self.recognitionRequest = request
 
-        let inputNode = audioEngine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
-        inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak request] buffer, _ in
             request?.append(buffer)
         }
@@ -86,6 +125,7 @@ final class VoiceService: ObservableObject {
         do {
             try audioEngine.start()
         } catch {
+            fullStopAudio()
             permissionError = "Gagal mulai merekam: \(error.localizedDescription)"
             return
         }
@@ -107,21 +147,24 @@ final class VoiceService: ObservableObject {
 
     func stopRecording() {
         guard isRecording else { return }
+        isRecording = false
         recognitionRequest?.endAudio()
         recognitionTask?.cancel()
         recognitionTask = nil
         recognitionRequest = nil
-        stopAudioEngine()
-        isRecording = false
+        fullStopAudio()
         // Kembalikan audio session agar TTS / audio lain jalan normal.
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    private func stopAudioEngine() {
+    /// Matikan engine sampai bersih: stop + hapus tap SELALU (bukan cuma saat running),
+    /// supaya tidak ada tap ganda yang memicu NSException di start berikutnya.
+    private func fullStopAudio() {
         if audioEngine.isRunning {
             audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
         }
+        audioEngine.inputNode.removeTap(onBus: 0)
+        audioEngine.reset()
     }
 
     // MARK: - Text-to-speech

@@ -141,7 +141,12 @@ struct SiriSettingsView: View {
                 await MainActor.run {
                     appState.availableModels = models
                     if !models.contains(appState.defaultModelId) {
-                        appState.defaultModelId = models.first ?? provider.defaultModel
+                        // Prefer default provider kalau ada di list.
+                        if models.contains(provider.defaultModel) {
+                            appState.defaultModelId = provider.defaultModel
+                        } else {
+                            appState.defaultModelId = models.first ?? provider.defaultModel
+                        }
                     }
                     modelsMessage = "\(models.count) model ditemukan."
                     loadingModels = false

@@ -10,6 +10,8 @@ struct SiriRootView: View {
 
     @State private var activeId: UUID?
     @State private var showHistory = false
+    /// True kalau conversation aktif dibuka dari history (tampilkan chevron < di SiriHomeView).
+    @State private var openedFromHistory = false
 
     private var activeConversation: Conversation? {
         if let id = activeId {
@@ -21,7 +23,7 @@ struct SiriRootView: View {
     var body: some View {
         Group {
             if let convo = activeConversation {
-                SiriHomeView(conversation: convo, showHistory: $showHistory)
+                SiriHomeView(conversation: convo, showHistory: $showHistory, openedFromHistory: openedFromHistory)
             } else {
                 // Belum ada conversation: buat satu.
                 Color(.systemBackground).ignoresSafeArea()
@@ -32,11 +34,13 @@ struct SiriRootView: View {
             HistoryView(
                 onSelect: { convo in
                     activeId = convo.id
+                    openedFromHistory = true
                     showHistory = false
                 },
                 onNewChat: {
                     let c = makeConversation()
                     activeId = c.id
+                    openedFromHistory = false
                     showHistory = false
                 }
             )
@@ -58,10 +62,7 @@ struct SiriRootView: View {
     @discardableResult
     private func makeConversation() -> Conversation {
         let provider = appState.activeProvider
-        var modelId = appState.defaultModelId
-        if !provider.allowsModel(modelId) || modelId.isEmpty {
-            modelId = provider.defaultModel
-        }
+        let modelId = appState.resolvedModelId(for: provider)
         let c = Conversation(title: "Obrolan baru", modelId: modelId)
         context.insert(c)
         try? context.save()

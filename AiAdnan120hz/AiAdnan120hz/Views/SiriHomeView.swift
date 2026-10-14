@@ -12,6 +12,9 @@ struct SiriHomeView: View {
     @StateObject private var viewModel = ChatViewModel()
     @StateObject private var voice = VoiceService()
     @Binding var showHistory: Bool
+    /// True kalau chat ini dibuka dari history (tampilkan chevron <),
+    /// false kalau chat baru/kosong (tampilkan X). Persis Siri asli.
+    var openedFromHistory: Bool = false
 
     @State private var inputText = ""
     @State private var pendingImages: [Data] = []
@@ -37,10 +40,11 @@ struct SiriHomeView: View {
             Color(.systemBackground).ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // X kiri atas → layar history.
+                // Kiri atas: chevron (<) kalau dibuka dari history,
+                // X kalau chat baru/kosong. Persis Siri asli.
                 HStack {
                     Button { showHistory = true } label: {
-                        Image(systemName: "xmark")
+                        Image(systemName: openedFromHistory ? "chevron.left" : "xmark")
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(.primary)
                             .frame(width: 52, height: 52)
@@ -55,13 +59,11 @@ struct SiriHomeView: View {
                 // Area tengah: orb (kosong) / daftar pesan.
                 ZStack {
                     if sortedMessages.isEmpty {
-                        // Empty state: orb di tengah, seperti foto.
+                        // Empty state: orb di tengah, faint nyaris tak terlihat (persis Siri asli).
                         SiriOrbView(animate: viewModel.isSending || voice.isRecording)
-                            .opacity(0.5)
+                            .opacity(0.15)
                     } else {
-                        // Ada pesan: orb jadi watermark faint di belakang.
-                        SiriOrbView(animate: viewModel.isSending || voice.isRecording)
-                            .opacity(0.12)
+                        // Ada pesan: orb HILANG total (persis Siri asli).
                         ScrollViewReader { proxy in
                             ScrollView {
                                 LazyVStack(spacing: 12) {
@@ -153,7 +155,7 @@ struct SiriHomeView: View {
                                     .font(.system(size: 22, weight: .bold))
                                     .foregroundStyle(.white)
                                     .frame(width: 56, height: 56)
-                                    .background(Circle().fill(Color.accentColor))
+                                    .background(Circle().fill(Color.black))
                             } else if voice.isRecording {
                                 Image(systemName: "stop.fill")
                                     .font(.system(size: 20))
@@ -378,8 +380,8 @@ struct SiriMessageRow: View {
                         if !message.text.isEmpty {
                             Text(message.text)
                                 .padding(12)
-                                .background(Color.accentColor)
-                                .foregroundStyle(.white)
+                                .background(Color(.systemGray5))
+                                .foregroundStyle(.primary)
                                 .clipShape(RoundedRectangle(cornerRadius: 16))
                         }
                     }
@@ -402,22 +404,17 @@ struct SiriMessageRow: View {
                         } else {
                             let shown = (isStreaming && !streamingText.isEmpty) ? streamingText : message.text
                             if isStreaming && shown.isEmpty {
-                                TypingIndicator()
-                                    .padding(12)
-                                    .background(Color(.systemGray6))
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                // Loading ala Siri asli: spinner kecil, bukan typing indicator.
+                                ProgressView()
+                                    .padding(.vertical, 8)
                             } else if shown.isEmpty {
                                 Text("Respons kosong dari AI.")
                                     .font(.footnote).foregroundStyle(.secondary)
-                                    .padding(12)
-                                    .background(Color(.systemGray6))
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
                             } else {
+                                // Pesan AI = teks polos hitam, TANPA bubble (persis Siri asli).
                                 Text(shown)
                                     .textSelection(.enabled)
-                                    .padding(12)
-                                    .background(Color(.systemGray6))
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .foregroundStyle(.primary)
                             }
                         }
                     }
@@ -432,24 +429,5 @@ struct SiriMessageRow: View {
                 Button("Coba lagi") { onRetry() }
             }
         }
-    }
-}
-
-// MARK: - Indikator "AI sedang mengetik".
-
-struct TypingIndicator: View {
-    @State private var phase = 0
-    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<3) { i in
-                Circle()
-                    .fill(Color.secondary)
-                    .frame(width: 8, height: 8)
-                    .opacity(phase == i ? 1.0 : 0.3)
-            }
-        }
-        .onReceive(timer) { _ in phase = (phase + 1) % 3 }
     }
 }
