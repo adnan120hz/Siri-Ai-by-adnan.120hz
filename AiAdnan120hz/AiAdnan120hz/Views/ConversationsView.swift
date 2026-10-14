@@ -154,7 +154,7 @@ struct ConversationsView: View {
                     } label: {
                         Image(systemName: "trash")
                             .font(.system(size: 22))
-                            .foregroundStyle(selection.isEmpty ? .secondary : .white)
+                            .foregroundStyle(selection.isEmpty ? Color.secondary : Color.white)
                             .frame(width: SiriTheme.circleButton, height: SiriTheme.circleButton)
                             .background(Circle().fill(selection.isEmpty ? SiriTheme.circleFill : Color.red))
                     }
