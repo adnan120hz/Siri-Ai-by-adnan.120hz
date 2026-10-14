@@ -1,6 +1,5 @@
 import SwiftUI
 
-// Requires iOS 17+
 
 // MARK: - Content gate: API key required before chatting.
 

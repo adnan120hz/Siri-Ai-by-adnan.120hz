@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftData
 
-// Requires iOS 17+
 
 // MARK: - Chat screen. Pixel-matched to the Siri iOS 27 reference:
 // white background, X/chevron top-left, faint orb on empty state,
@@ -57,7 +56,7 @@ struct ChatView: View {
                 ScrollView {
                     LazyVStack(spacing: SiriTheme.m) {
                         if messages.isEmpty {
-                            SiriOrbFaint()
+                            SiriOrbFaint(animate: true)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .padding(.top, 120)
                         } else {
@@ -73,6 +72,7 @@ struct ChatView: View {
                                     }
                                 )
                                 .id(msg.id)
+                                .transition(.scale(scale: 0.9).combined(with: .opacity))
                             }
                             if viewModel.isSending && viewModel.streamingText.isEmpty {
                                 HStack {
@@ -87,6 +87,7 @@ struct ChatView: View {
                     .padding(.horizontal, SiriTheme.m)
                     .padding(.top, SiriTheme.s)
                 }
+                .animation(SiriTheme.conversational, value: messages.count)
                 .onChange(of: messages.count) { _, _ in
                     if let last = messages.last {
                         withAnimation(SiriTheme.composerGrow) {
@@ -126,17 +127,19 @@ struct ChatView: View {
                                 .offset(x: 6, y: -6)
                                 .accessibilityLabel(Text("Remove attachment"))
                             }
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
                         }
                     }
                     .padding(.horizontal, SiriTheme.m)
                     .padding(.vertical, SiriTheme.s)
+                    .animation(SiriTheme.pop, value: pendingImages.count)
                 }
             }
 
             // Bottom bar.
             HStack(spacing: 10) {
                 SiriCircleButton(systemImage: "plus", imageSize: 24) {
-                    withAnimation(SiriTheme.snappy) { showPlusMenu.toggle() }
+                    withAnimation(SiriTheme.pop) { showPlusMenu.toggle() }
                 }
                 .accessibilityLabel(Text("Attach"))
 
@@ -157,6 +160,7 @@ struct ChatView: View {
             }
             .padding(.horizontal, SiriTheme.m)
             .padding(.vertical, 12)
+            .animation(SiriTheme.keyboard, value: fieldFocused)
         }
         .background(Color(.systemBackground))
         .overlay(plusMenuOverlay)
@@ -262,10 +266,10 @@ struct ChatView: View {
                 Color.black.opacity(0.001)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        withAnimation(SiriTheme.snappy) { showPlusMenu = false }
+                        withAnimation(SiriTheme.pop) { showPlusMenu = false }
                     }
                 VStack(alignment: .leading, spacing: 0) {
-                    plusRow(icon: "camera", title: "Camera") {
+                    plusRow(icon: "camera.fill", title: "Camera") {
                         dismissMenu()
                         if UIImagePickerController.isSourceTypeAvailable(.camera) {
                             showCamera = true
@@ -273,10 +277,10 @@ struct ChatView: View {
                             alertText = "Camera is not available on this device."
                         }
                     }
-                    plusRow(icon: "photo.on.rectangle", title: "Photos") {
+                    plusRow(icon: "photo.fill.on.rectangle.fill", title: "Photos") {
                         dismissMenu(); showPhotoPicker = true
                     }
-                    plusRow(icon: "doc", title: "Files") {
+                    plusRow(icon: "doc.fill", title: "Files") {
                         dismissMenu(); showFilePicker = true
                     }
                 }
@@ -316,7 +320,7 @@ struct ChatView: View {
     }
 
     private func dismissMenu() {
-        withAnimation(SiriTheme.snappy) { showPlusMenu = false }
+        withAnimation(SiriTheme.pop) { showPlusMenu = false }
     }
 
     // MARK: - Actions.
@@ -352,14 +356,11 @@ struct ChatView: View {
     }
 
     private func retry(_ message: ChatMessage) {
+        // Jangan kirim ulang teks pesan assistant (kosong saat error) —
+        // retryLast mengambil pesan user sebelumnya yang benar.
         message.errorText = nil
         try? context.save()
-        let text = message.text
-        viewModel.send(
-            conversation: conversation, text: text,
-            imageDatas: [], note: nil,
-            context: context, appState: appState
-        )
+        viewModel.retryLast(conversation: conversation, context: context, appState: appState)
     }
 
     private func addPickedImage(_ data: Data) {
@@ -394,13 +395,30 @@ struct MessageRow: View {
                 HStack {
                     Spacer(minLength: 48)
                     VStack(alignment: .trailing, spacing: 6) {
-                        if let first = message.images.first,
-                           let ui = UIImage(data: first.data) {
-                            Image(uiImage: ui)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 160, height: 160)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        if !message.images.isEmpty {
+                            if message.images.count == 1,
+                               let first = message.images.first,
+                               let ui = UIImage(data: first.data) {
+                                Image(uiImage: ui)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 160, height: 160)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(Array(message.images.enumerated()), id: \.offset) { _, img in
+                                            if let ui = UIImage(data: img.data) {
+                                                Image(uiImage: ui)
+                                                    .resizable()
+                                                    .scaledToFill()
+                                                    .frame(width: 100, height: 100)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                         if !message.text.isEmpty {
                             Text(message.text)

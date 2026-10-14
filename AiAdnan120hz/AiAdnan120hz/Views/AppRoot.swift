@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftData
 
-// Requires iOS 17+
 
 // MARK: - App root: active chat + conversations browser (full screen).
 

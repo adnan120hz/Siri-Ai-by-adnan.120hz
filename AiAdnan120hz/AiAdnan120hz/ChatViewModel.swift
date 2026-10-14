@@ -23,10 +23,22 @@ final class ChatViewModel: ObservableObject {
     func send(conversation: Conversation, text: String,
               imageDatas: [(data: Data, isVideoFrame: Bool)],
               note: String?, context: ModelContext, appState: AppState) {
-        guard !isSending else { return }
+        // Recover stuck state: isSending true tapi tidak ada task berjalan
+        // (mis. task mati sebelum reset). Tanpa ini, semua kirim gagal diam-diam.
+        if isSending && streamTask == nil {
+            print("[SiriAi] send(): recovering stuck isSending state")
+            isSending = false
+            streamingText = ""
+        }
+        guard !isSending else {
+            print("[SiriAi] send(): ignored, already sending")
+            return
+        }
         let provider = appState.activeProvider
         guard let apiKey = KeychainStore.load(for: provider), !apiKey.isEmpty else {
-            lastError = APIError.noKey.localizedDescription
+            let msg = APIError.noKey.localizedDescription
+            print("[SiriAi] send(): aborted — no API key for \(provider.rawValue)")
+            lastError = msg
             return
         }
         // Model id basi/kosong → normalisasi ke model bawaan provider aktif.
@@ -61,7 +73,11 @@ final class ChatViewModel: ObservableObject {
         conversation.messages.append(userMsg)
         conversation.updatedAt = Date()
         if conversation.title == "Obrolan baru" {
-            conversation.title = String(trimmed.prefix(40))
+            if !trimmed.isEmpty {
+                conversation.title = String(trimmed.prefix(40))
+            } else if !imageDatas.isEmpty {
+                conversation.title = "New Photo"
+            }
         }
         try? context.save()
 
@@ -76,29 +92,52 @@ final class ChatViewModel: ObservableObject {
         conversation.messages.append(assistantMsg)
         try? context.save()
 
+        print("[SiriAi] send(): provider=\(provider.rawValue) model=\(modelId) text=\(trimmed.prefix(60)) images=\(imageDatas.count)")
+
         streamTask = Task { @MainActor in
-            do {
-                var full: String
+            // Satu putaran kirim (dipanggil 2x kalau retry).
+            func runTurn() async throws -> String {
                 let ghConnected = !(GitHubStore.load() ?? "").isEmpty
                 if ghConnected {
                     // Mode AGENT: AI bisa panggil tools GitHub beneran.
                     // Kalau model tidak support function calling → fallback streaming biasa.
                     do {
-                        full = try await self.agentTurn(apiKey: apiKey, provider: provider, model: modelId,
+                        return try await self.agentTurn(apiKey: apiKey, provider: provider, model: modelId,
                                                         messages: apiMessages,
                                                         assistantMsg: assistantMsg)
                     } catch is AIClient.ToolsNotSupported {
                         let (t, _) = try await self.streamingTurn(apiKey: apiKey, provider: provider, model: modelId,
                                                                   messages: apiMessages,
                                                                   assistantMsg: assistantMsg)
-                        full = t
+                        return t
                     }
                 } else {
                     let (t, _) = try await self.streamingTurn(apiKey: apiKey, provider: provider, model: modelId,
                                                               messages: apiMessages,
                                                               assistantMsg: assistantMsg)
-                    full = t
+                    return t
                 }
+            }
+
+            do {
+                let full: String
+                do {
+                    full = try await runTurn()
+                } catch let e as APIError {
+                    // NVIDIA me-list model yang belum tentu ter-deploy di akun user → 404.
+                    // Coba sekali lagi dengan model default provider sebelum menyerah.
+                    if case .http(let status, _) = e, (status == 404 || status == 400),
+                       modelId != provider.defaultModel {
+                        print("[SiriAi] HTTP \(status) for model \(modelId); retrying once with default \(provider.defaultModel)")
+                        modelId = provider.defaultModel
+                        conversation.modelId = modelId
+                        try? context.save()
+                        full = try await runTurn()
+                    } else {
+                        throw e
+                    }
+                }
+                print("[SiriAi] response OK (\(full.count) chars)")
                 assistantMsg.errorText = nil
                 try? context.save()
                 // 4. Ingatan + ringkasan (background task, diam kalau gagal).
@@ -114,12 +153,14 @@ final class ChatViewModel: ObservableObject {
                                                       conversation: conversation, context: context)
                 }
             } catch let e as APIError {
+                print("[SiriAi] APIError: \(e.localizedDescription.prefix(200))")
                 assistantMsg.text = ""
                 let desc = Self.visionHintIfNeeded(e.localizedDescription, hadImages: !imageDatas.isEmpty)
                 assistantMsg.errorText = desc
                 self.lastError = desc
                 try? context.save()
             } catch {
+                print("[SiriAi] error: \(error.localizedDescription.prefix(200))")
                 var desc = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 desc = Self.visionHintIfNeeded(desc, hadImages: !imageDatas.isEmpty)
                 assistantMsg.errorText = desc
@@ -141,6 +182,7 @@ final class ChatViewModel: ObservableObject {
         var streamTokens = 0
         // Coba streaming dulu; kalau server menolak, fallback non-streaming.
         do {
+            print("[SiriAi] streaming: \(model) @ \(provider.baseURL.host ?? "?")")
             for try await token in AIClient.streamChat(apiKey: apiKey, provider: provider, model: model,
                                                            messages: messages) {
                 full += token
@@ -152,6 +194,7 @@ final class ChatViewModel: ObservableObject {
             let promptEst = messages.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
             TokenUsage.record(tokens: streamTokens + promptEst)
         } catch is AIClient.StreamSetupFailed {
+            print("[SiriAi] stream setup failed; falling back to non-streaming")
             full = try await AIClient.sendChat(apiKey: apiKey, provider: provider, model: model,
                                                    messages: messages)
             assistantMsg.text = full

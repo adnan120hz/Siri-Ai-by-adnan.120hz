@@ -72,7 +72,7 @@ enum AIProvider: String, CaseIterable, Identifiable {
     var keyGetURL: URL {
         switch self {
         case .apinex: return URL(string: "https://apinex.bond")!
-        case .nvidia: return URL(string: "https://build.nvidia.com")!
+        case .nvidia: return URL(string: "https://build.nvidia.com/settings/api-keys")!
         }
     }
 

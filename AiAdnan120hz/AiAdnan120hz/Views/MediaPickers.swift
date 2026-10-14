@@ -2,7 +2,6 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 
-// Requires iOS 17+
 
 // MARK: - Camera (photo capture).
 
@@ -48,7 +47,7 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var config = PHPickerConfiguration(photoLibrary: .shared())
-        config.filter = .images
+        config.filter = .any(of: [.images, .videos])
         config.selectionLimit = 4
         let p = PHPickerViewController(configuration: config)
         p.delegate = context.coordinator
@@ -66,19 +65,25 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             parent.dismiss()
             guard !results.isEmpty else { return }
-            var datas: [Data] = []
-            let group = DispatchGroup()
-            for r in results where r.itemProvider.canLoadObject(ofClass: UIImage.self) {
-                group.enter()
-                r.itemProvider.loadObject(ofClass: UIImage.self) { obj, _ in
-                    defer { group.leave() }
-                    if let img = obj as? UIImage,
-                       let data = img.jpegData(compressionQuality: 0.85) {
-                        datas.append(data)
+            Task { @MainActor in
+                var datas: [Data] = []
+                for r in results {
+                    let provider = r.itemProvider
+                    if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+                        // Video → extract frames so the AI can "see" it.
+                        if let url = try? await provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) {
+                            let frames = await MediaService.extractFrames(from: url)
+                            datas.append(contentsOf: frames)
+                        }
+                    } else if provider.canLoadObject(ofClass: UIImage.self) {
+                        if let img = try? await provider.loadObject(ofClass: UIImage.self) as? UIImage,
+                           let data = img.jpegData(compressionQuality: 0.85) {
+                            datas.append(data)
+                        }
                     }
                 }
+                self.parent.onPick(datas)
             }
-            group.notify(queue: .main) { self.parent.onPick(datas) }
         }
     }
 }

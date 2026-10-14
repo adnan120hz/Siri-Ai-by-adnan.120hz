@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftData
 
-// Requires iOS 17+
 
 // MARK: - Settings. Native Form.
 // API key per provider (required: at least 1), model auto-detect,
@@ -14,7 +13,6 @@ struct SettingsView: View {
     @Query(sort: \MemoryFact.createdAt, order: .reverse) private var facts: [MemoryFact]
     @Query(sort: \Conversation.updatedAt, order: .reverse) private var conversations: [Conversation]
 
-    @State private var provider: AIProvider = .apinex
     @State private var keyInput = ""
     @State private var isValidating = false
     @State private var keyMessage: String?
@@ -37,32 +35,32 @@ struct SettingsView: View {
                 }
 
                 Section(header: Text("AI Provider")) {
-                    Picker("Provider", selection: $provider) {
+                    Picker("Provider", selection: $appState.activeProvider) {
                         ForEach(AIProvider.allCases) { p in
                             Text(p.title).tag(p)
                         }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: provider) { _, _ in
+                    .onChange(of: appState.activeProvider) { _, _ in
                         keyInput = ""
                         keyMessage = nil
                     }
 
                     HStack(spacing: SiriTheme.s) {
-                        Image(systemName: appState.hasKey(for: provider)
+                        Image(systemName: appState.hasKey(for: appState.activeProvider)
                               ? "checkmark.circle.fill" : "xmark.circle.fill")
-                            .foregroundStyle(appState.hasKey(for: provider) ? .green : .red)
-                        Text(appState.hasKey(for: provider)
-                             ? "Key \(provider.title): \(KeychainStore.masked(KeychainStore.load(for: provider) ?? ""))"
-                             : "No \(provider.title) key yet")
+                            .foregroundStyle(appState.hasKey(for: appState.activeProvider) ? .green : .red)
+                        Text(appState.hasKey(for: appState.activeProvider)
+                             ? "Key \(appState.activeProvider.title): \(KeychainStore.masked(KeychainStore.load(for: appState.activeProvider) ?? ""))"
+                             : "No \(appState.activeProvider.title) key yet")
                             .font(.subheadline)
                     }
 
-                    Text(provider.keyHelp)
+                    Text(appState.activeProvider.keyHelp)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     // English link, per user instruction.
-                    Link("Get your API key here", destination: provider.keyGetURL)
+                    Link("Get your API key here", destination: appState.activeProvider.keyGetURL)
                         .font(.footnote)
                         .fontWeight(.semibold)
 
@@ -75,10 +73,10 @@ struct SettingsView: View {
                             Task { @MainActor in await saveKey() }
                         }
                         .disabled(keyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isValidating)
-                        if appState.hasKey(for: provider) {
+                        if appState.hasKey(for: appState.activeProvider) {
                             Spacer()
                             Button("Remove", role: .destructive) {
-                                KeychainStore.remove(for: provider)
+                                KeychainStore.remove(for: appState.activeProvider)
                                 appState.refreshKeyStatus()
                                 keyMessage = nil
                             }
@@ -166,13 +164,14 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .presentationDetents([.medium, .large])
+            .presentationContentInteraction(.scrolls)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
             .onAppear {
-                provider = appState.activeProvider
                 refreshStorage()
             }
         }
@@ -187,19 +186,19 @@ struct SettingsView: View {
         isValidating = true
         keyMessage = nil
         do {
-            let models = try await AIClient.fetchAllowedModels(apiKey: key, provider: provider)
-            guard KeychainStore.save(key, for: provider) else {
+            let p = appState.activeProvider
+            let models = try await AIClient.fetchAllowedModels(apiKey: key, provider: p)
+            guard KeychainStore.save(key, for: p) else {
                 keyMessage = "Could not save to Keychain."
                 isValidating = false
                 return
             }
-            appState.activeProvider = provider
             appState.refreshKeyStatus()
             appState.availableModels = models
             if !models.contains(appState.defaultModelId) {
-                appState.defaultModelId = models.contains(provider.defaultModel)
-                    ? provider.defaultModel
-                    : (models.first ?? provider.defaultModel)
+                appState.defaultModelId = models.contains(p.defaultModel)
+                    ? p.defaultModel
+                    : (models.first ?? p.defaultModel)
             }
             keyInput = ""
             keyMessage = "Key saved. \(models.count) models found."

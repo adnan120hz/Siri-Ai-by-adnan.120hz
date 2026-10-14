@@ -1,13 +1,12 @@
 import SwiftUI
 import SwiftData
 
-// Requires iOS 17+
 
-// MARK: - Conversations (history). Reference: Siri iOS 27.
-// Settings gear top-left, "Conversations" title, hamburger top-right
-// (Grid / List / Select). Grid cards 2-col rounded-28, list with
-// Today / Previous 30 Days sections, select mode with gray checkboxes
-// and centered delete alert. Search + compose at the bottom.
+// MARK: - Conversations (photo history). Reference: Siri iOS 27.
+// Masonry 2-column photo grid with REAL photos full-bleed (no gray placeholders),
+// date + bold white title overlaid at top. Settings gear top-left,
+// hamburger top-right (Grid / List / Select). Search + compose at bottom.
+// Staggered spring entrance, long-press to delete.
 
 enum ConversationsMode {
     case grid, list, select
@@ -49,7 +48,7 @@ struct ConversationsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar: settings left, title center, hamburger/checkmark right.
+            // Top bar: settings left, hamburger/checkmark right.
             HStack {
                 SiriCircleButton(systemImage: "gearshape", imageSize: 22) {
                     showSettings = true
@@ -65,15 +64,17 @@ struct ConversationsView: View {
                     .accessibilityLabel(Text("Done"))
                 } else {
                     Menu {
-                        Button { mode = .grid } label: {
+                        Button { withAnimation(SiriTheme.liquid) { mode = .grid } } label: {
                             Label("Grid", systemImage: "square.grid.2x2")
                         }
-                        Button { mode = .list } label: {
+                        Button { withAnimation(SiriTheme.liquid) { mode = .list } } label: {
                             Label("List", systemImage: "list.bullet")
                         }
                         Button {
-                            mode = .select
-                            selection.removeAll()
+                            withAnimation(SiriTheme.liquid) {
+                                mode = .select
+                                selection.removeAll()
+                            }
                         } label: {
                             Label("Select", systemImage: "checkmark.circle")
                         }
@@ -82,7 +83,7 @@ struct ConversationsView: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(.primary)
                             .frame(width: SiriTheme.circleButton, height: SiriTheme.circleButton)
-                            .background(Circle().fill(SiriTheme.circleFill))
+                            .background(SiriCircleGlassFill())
                     }
                     .accessibilityLabel(Text("View options"))
                 }
@@ -90,13 +91,17 @@ struct ConversationsView: View {
             .padding(.horizontal, SiriTheme.m)
             .padding(.top, SiriTheme.s)
 
-            Text("Conversations")
-                .font(.title2)
-                .bold()
-                .padding(.top, SiriTheme.s)
-                .padding(.bottom, SiriTheme.s)
+            // Title only in list mode (photo view has none, per reference).
+            if mode == .list {
+                Text("Conversations")
+                    .font(.title2)
+                    .bold()
+                    .padding(.top, SiriTheme.s)
+                    .padding(.bottom, SiriTheme.s)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
 
-            // Inline search (no NavigationStack needed).
+            // Inline search.
             if showSearch {
                 HStack(spacing: SiriTheme.s) {
                     Image(systemName: "magnifyingglass")
@@ -128,20 +133,20 @@ struct ConversationsView: View {
             Group {
                 if filtered.isEmpty {
                     emptyState
-                } else if mode == .grid || mode == .select {
-                    gridContent
-                } else {
+                } else if mode == .list {
                     listContent
+                } else {
+                    masonryContent
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             Spacer(minLength: 0)
 
-            // Bottom: search left, trash (select mode) / compose right.
+            // Bottom: search left, trash (select) / compose right.
             HStack {
                 SiriCircleButton(systemImage: "magnifyingglass", imageSize: 24) {
-                    withAnimation(SiriTheme.snappy) { showSearch.toggle() }
+                    withAnimation(SiriTheme.liquid) { showSearch.toggle() }
                 }
                 .accessibilityLabel(Text("Search"))
                 Spacer()
@@ -182,51 +187,78 @@ struct ConversationsView: View {
         .background(Color(.systemBackground))
         .sheet(isPresented: $showSettings) { SettingsView() }
         .overlay(deleteAlertOverlay)
-        .animation(SiriTheme.snappy, value: showSearch)
+        .animation(SiriTheme.liquid, value: showSearch)
+        .animation(SiriTheme.liquid, value: mode)
     }
 
     // MARK: - Empty state.
 
     private var emptyState: some View {
         VStack(spacing: SiriTheme.m) {
-            SiriOrbFaint()
+            SiriOrbFaint(animate: true)
             Text("No Conversations")
                 .font(.headline)
                 .foregroundStyle(.primary)
         }
     }
 
-    // MARK: - Grid.
+    // MARK: - Masonry photo grid (primary view).
 
-    private var gridContent: some View {
-        ScrollView {
-            LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)],
-                spacing: 14
-            ) {
-                ForEach(filtered) { convo in
-                    ConversationCard(
-                        conversation: convo,
-                        selectMode: mode == .select,
-                        isSelected: selection.contains(convo.id)
-                    )
-                    .onTapGesture {
-                        if mode == .select {
-                            toggleSelect(convo)
-                        } else {
-                            onSelect(convo)
+    private var masonryContent: some View {
+        GeometryReader { geo in
+            let colWidth = (geo.size.width - 40 - 14) / 2
+            ScrollView {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(spacing: 14) {
+                        ForEach(masonryColumn(0)) { convo in
+                            let idx = filtered.firstIndex(where: { $0.id == convo.id }) ?? 0
+                            MasonryCard(
+                                conversation: convo,
+                                index: idx,
+                                columnWidth: colWidth,
+                                selectMode: mode == .select,
+                                isSelected: selection.contains(convo.id),
+                                onTap: {
+                                    if mode == .select { toggleSelect(convo) }
+                                    else { onSelect(convo) }
+                                },
+                                onDelete: {
+                                    pendingDelete = [convo]
+                                    showDeleteAlert = true
+                                }
+                            )
                         }
                     }
-                    .contextMenu {
-                        Button("Delete", role: .destructive) {
-                            pendingDelete = [convo]
-                            showDeleteAlert = true
+                    VStack(spacing: 14) {
+                        ForEach(masonryColumn(1)) { convo in
+                            let idx = filtered.firstIndex(where: { $0.id == convo.id }) ?? 0
+                            MasonryCard(
+                                conversation: convo,
+                                index: idx,
+                                columnWidth: colWidth,
+                                selectMode: mode == .select,
+                                isSelected: selection.contains(convo.id),
+                                onTap: {
+                                    if mode == .select { toggleSelect(convo) }
+                                    else { onSelect(convo) }
+                                },
+                                onDelete: {
+                                    pendingDelete = [convo]
+                                    showDeleteAlert = true
+                                }
+                            )
                         }
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, SiriTheme.s)
             }
-            .padding(.horizontal, SiriTheme.m)
         }
+    }
+
+    /// Split filtered conversations into two masonry columns (alternating).
+    private func masonryColumn(_ col: Int) -> [Conversation] {
+        filtered.enumerated().compactMap { $0.offset % 2 == col ? $0.element : nil }
     }
 
     // MARK: - List.
@@ -263,7 +295,9 @@ struct ConversationsView: View {
             ZStack {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
-                    .onTapGesture { showDeleteAlert = false }
+                    .onTapGesture {
+                        withAnimation(SiriTheme.pop) { showDeleteAlert = false }
+                    }
                 VStack(spacing: 0) {
                     Text(pendingDelete.count == 1 ? "Delete Chat?" : "Delete Chats?")
                         .font(.headline)
@@ -276,7 +310,7 @@ struct ConversationsView: View {
                     Divider()
                     HStack(spacing: 0) {
                         Button {
-                            showDeleteAlert = false
+                            withAnimation(SiriTheme.pop) { showDeleteAlert = false }
                         } label: {
                             Text("Cancel")
                                 .font(.body)
@@ -291,8 +325,10 @@ struct ConversationsView: View {
                             try? context.save()
                             pendingDelete = []
                             selection.removeAll()
-                            showDeleteAlert = false
-                            if mode == .select && filtered.isEmpty { mode = .grid }
+                            withAnimation(SiriTheme.pop) { showDeleteAlert = false }
+                            if mode == .select && filtered.isEmpty {
+                                withAnimation(SiriTheme.liquid) { mode = .grid }
+                            }
                             UINotificationFeedbackGenerator().notificationOccurred(.warning)
                         } label: {
                             Text("Delete")
@@ -309,6 +345,7 @@ struct ConversationsView: View {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color(.systemBackground))
                 )
+                .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
             .zIndex(2)
         }
@@ -317,7 +354,7 @@ struct ConversationsView: View {
     // MARK: - Helpers.
 
     private func toggleSelect(_ convo: Conversation) {
-        withAnimation(SiriTheme.snappy) {
+        withAnimation(SiriTheme.liquid) {
             if selection.contains(convo.id) { selection.remove(convo.id) }
             else { selection.insert(convo.id) }
         }
@@ -325,7 +362,7 @@ struct ConversationsView: View {
     }
 
     private func exitSelectMode() {
-        withAnimation(SiriTheme.snappy) {
+        withAnimation(SiriTheme.liquid) {
             mode = .grid
             selection.removeAll()
         }
@@ -337,12 +374,40 @@ struct ConversationsView: View {
     }
 }
 
-// MARK: - Grid card: rounded-28, date + bold white title over thumbnail.
+// MARK: - Masonry card: REAL photo full-bleed, date + title overlaid at top.
+// Height follows the real photo aspect ratio (natural masonry rhythm).
+// Staggered spring entrance: 0.05s delay per index.
 
-struct ConversationCard: View {
+struct MasonryCard: View {
     let conversation: Conversation
+    let index: Int
+    let columnWidth: CGFloat
     var selectMode: Bool = false
     var isSelected: Bool = false
+    var onTap: () -> Void
+    var onDelete: () -> Void
+
+    @State private var appeared = false
+    // Cache: decode UIImage sekali di onAppear, bukan tiap body evaluate (berat di main thread).
+    @State private var cachedPhoto: UIImage?
+
+    private func loadPhoto() {
+        for msg in conversation.messages {
+            if let img = msg.images.first, let ui = UIImage(data: img.data) {
+                cachedPhoto = ui
+                return
+            }
+        }
+        cachedPhoto = nil
+    }
+
+    /// Card aspect (h/w): real photo ratio clamped, else varied rhythm.
+    private var aspect: CGFloat {
+        if let ui = cachedPhoto, ui.size.width > 0 {
+            return min(1.6, max(0.75, ui.size.height / ui.size.width))
+        }
+        return [1.05, 1.3, 0.9][index % 3]
+    }
 
     private var dateText: String {
         let f = DateFormatter()
@@ -350,35 +415,35 @@ struct ConversationCard: View {
         return f.string(from: conversation.updatedAt)
     }
 
-    private var firstImage: UIImage? {
-        for msg in conversation.messages {
-            if let img = msg.images.first, let ui = UIImage(data: img.data) {
-                return ui
-            }
-        }
-        return nil
-    }
-
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Thumbnail or neutral placeholder (no purple-blue gradient).
-            if let ui = firstImage {
-                Image(uiImage: ui)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                ZStack {
-                    Color(.systemGray4)
-                    Image("SiriOrb")
+            Group {
+                if let ui = cachedPhoto {
+                    Image(uiImage: ui)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 110, height: 110)
-                        .clipShape(Circle())
-                        .opacity(0.35)
+                } else {
+                    // Placeholder yang bagus: warm neutral gradient + faint orb.
+                    // Bukan abu flat, bukan gradient ungu-biru.
+                    ZStack {
+                        LinearGradient(
+                            colors: [Color(.systemGray6), Color(.systemGray4)],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                        Image("SiriOrb")
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 110, height: 110)
+                            .clipShape(Circle())
+                            .opacity(0.3)
+                    }
                 }
             }
+            .frame(width: columnWidth, height: columnWidth * aspect)
+            .clipped()
 
-            VStack(alignment: .leading, spacing: SiriTheme.xs) {
+            // Date + title overlaid at top, readable over any photo.
+            VStack(alignment: .leading, spacing: 4) {
                 Text(dateText)
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -388,7 +453,7 @@ struct ConversationCard: View {
                     .lineLimit(2)
             }
             .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+            .shadow(color: .black.opacity(0.4), radius: 5, y: 1)
             .padding(SiriTheme.m)
 
             if selectMode {
@@ -405,9 +470,23 @@ struct ConversationCard: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(0.85, contentMode: .fit)
+        .frame(width: columnWidth, height: columnWidth * aspect)
         .clipShape(RoundedRectangle(cornerRadius: SiriTheme.cardCorner, style: .continuous))
+        .opacity(appeared ? 1 : 0)
+        .scaleEffect(appeared ? 1 : 0.92)
+        .onTapGesture(perform: onTap)
+        .contextMenu {
+            Button("Delete", role: .destructive, action: onDelete)
+        }
+        .onAppear { loadPhoto() }
+        .onChange(of: conversation.messages.count) { _, _ in loadPhoto() }
+        .task {
+            // Staggered entrance: 0.05s per index, spring.
+            try? await Task.sleep(nanoseconds: UInt64(min(index, 12)) * 50_000_000)
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                appeared = true
+            }
+        }
     }
 }
 
@@ -416,18 +495,22 @@ struct ConversationCard: View {
 struct ConversationListRow: View {
     let conversation: Conversation
 
+    // Cache: decode UIImage sekali, bukan tiap body evaluate.
+    @State private var cachedThumb: UIImage?
+
+    private func loadThumb() {
+        for msg in conversation.messages {
+            if let img = msg.images.first, let ui = UIImage(data: img.data) {
+                cachedThumb = ui
+                return
+            }
+        }
+        cachedThumb = nil
+    }
+
     private var snippet: String {
         conversation.messages.sorted { $0.createdAt < $1.createdAt }
             .last(where: { !$0.text.isEmpty })?.text ?? ""
-    }
-
-    private var firstImage: UIImage? {
-        for msg in conversation.messages {
-            if let img = msg.images.first, let ui = UIImage(data: img.data) {
-                return ui
-            }
-        }
-        return nil
     }
 
     var body: some View {
@@ -442,7 +525,7 @@ struct ConversationListRow: View {
                     .lineLimit(1)
             }
             Spacer()
-            if let ui = firstImage {
+            if let ui = cachedThumb {
                 Image(uiImage: ui)
                     .resizable()
                     .scaledToFill()
@@ -463,5 +546,7 @@ struct ConversationListRow: View {
             }
         }
         .padding(.vertical, SiriTheme.xs)
+        .onAppear { loadThumb() }
+        .onChange(of: conversation.messages.count) { _, _ in loadThumb() }
     }
 }
