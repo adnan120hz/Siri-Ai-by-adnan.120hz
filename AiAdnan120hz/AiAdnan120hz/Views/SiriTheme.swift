@@ -50,21 +50,22 @@ enum SiriTheme {
 struct SiriCircleGlassFill: View {
     var body: some View {
         ZStack {
-            // Base blur.
-            Circle().fill(.ultraThinMaterial)
+            // Base: clean white with subtle blur (not gray on white bg).
+            Circle().fill(.white.opacity(0.85))
+            Circle().fill(.ultraThinMaterial.opacity(0.3))
             // Light reflection: white sheen at top, fading down.
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [.white.opacity(0.35), .white.opacity(0.05)],
+                        colors: [.white.opacity(0.5), .white.opacity(0.1)],
                         startPoint: .top, endPoint: .center
                     )
                 )
             // Subtle border for definition.
             Circle()
-                .strokeBorder(.white.opacity(0.4), lineWidth: 0.5)
+                .strokeBorder(.black.opacity(0.08), lineWidth: 0.5)
         }
-        .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+        .shadow(color: .black.opacity(0.06), radius: 6, y: 1)
     }
 }
 
