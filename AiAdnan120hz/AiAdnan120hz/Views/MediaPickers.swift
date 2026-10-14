@@ -81,8 +81,12 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
                             datas.append(contentsOf: frames)
                         }
                     } else if provider.canLoadObject(ofClass: UIImage.self) {
-                        if let img = try? await provider.loadObject(ofClass: UIImage.self) as? UIImage,
-                           let data = img.jpegData(compressionQuality: 0.85) {
+                        let img: UIImage? = await withCheckedContinuation { cont in
+                            _ = provider.loadObject(ofClass: UIImage.self) { obj, _ in
+                                cont.resume(returning: obj as? UIImage)
+                            }
+                        }
+                        if let img, let data = img.jpegData(compressionQuality: 0.85) {
                             datas.append(data)
                         }
                     }
