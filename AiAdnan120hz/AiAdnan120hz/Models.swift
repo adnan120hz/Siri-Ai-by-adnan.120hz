@@ -127,6 +127,11 @@ final class AppState: ObservableObject {
     @Published var availableModels: [String] = []
     @Published var modelsError: String?
 
+    /// Provider aktif: "apinex" | "nvidia". Key disimpan terpisah per provider.
+    @Published var activeProvider: AIProvider = AIProvider(rawValue: UserDefaults.standard.string(forKey: "aiProvider") ?? "apinex") ?? .apinex {
+        didSet { UserDefaults.standard.set(activeProvider.rawValue, forKey: "aiProvider") }
+    }
+
     // @AppStorage tidak memicu objectWillChange di dalam ObservableObject
     // (UI tidak refresh) → pakai @Published + tulis UserDefaults manual.
     @Published var defaultModelId: String = UserDefaults.standard.string(forKey: "defaultModelId") ?? "" {
@@ -136,21 +141,52 @@ final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(memoryEnabled, forKey: "memoryEnabled") }
     }
     /// "system" | "dark" | "light"
-    @Published var appearanceMode: String = UserDefaults.standard.string(forKey: "appearanceMode") ?? "dark" {
+    @Published var appearanceMode: String = UserDefaults.standard.string(forKey: "appearanceMode") ?? "system" {
         didSet { UserDefaults.standard.set(appearanceMode, forKey: "appearanceMode") }
+    }
+    /// Bacakan respons AI dengan suara (AVSpeechSynthesizer).
+    @Published var autoSpeak: Bool = UserDefaults.standard.object(forKey: "autoSpeak") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(autoSpeak, forKey: "autoSpeak") }
     }
 
     init() {
         refreshKeyStatus()
     }
 
+    /// Key aktif = key milik provider aktif. Kalau provider aktif belum punya key
+    /// tapi provider lain punya, otomatis pindah ke yang punya key.
+    var activeKey: String? {
+        KeychainStore.load(for: activeProvider)
+    }
+
     func refreshKeyStatus() {
-        if let key = KeychainStore.load(), !key.isEmpty {
+        if let key = KeychainStore.load(for: activeProvider), !key.isEmpty {
             hasAPIKey = true
             keyMasked = KeychainStore.masked(key)
-        } else {
-            hasAPIKey = false
-            keyMasked = ""
+            return
         }
+        // Fallback: pakai provider lain yang punya key.
+        for p in AIProvider.allCases where p != activeProvider {
+            if let key = KeychainStore.load(for: p), !key.isEmpty {
+                activeProvider = p
+                hasAPIKey = true
+                keyMasked = KeychainStore.masked(key)
+                return
+            }
+        }
+        hasAPIKey = false
+        keyMasked = ""
+    }
+
+    func hasKey(for provider: AIProvider) -> Bool {
+        if let k = KeychainStore.load(for: provider), !k.isEmpty { return true }
+        return false
+    }
+
+    func maskedKey(for provider: AIProvider) -> String {
+        if let k = KeychainStore.load(for: provider), !k.isEmpty {
+            return KeychainStore.masked(k)
+        }
+        return ""
     }
 }

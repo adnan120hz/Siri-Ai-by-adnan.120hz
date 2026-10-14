@@ -6,12 +6,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if appState.hasAPIKey {
-                TabView {
-                    ConversationListView()
-                        .tabItem { Label("Obrolan", systemImage: "bubble.left.and.bubble.right") }
-                    SettingsView()
-                        .tabItem { Label("Pengaturan", systemImage: "gearshape") }
-                }
+                SiriRootView()
             } else {
                 APIKeyView()
             }

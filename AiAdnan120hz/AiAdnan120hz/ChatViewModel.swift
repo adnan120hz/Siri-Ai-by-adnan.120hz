@@ -24,15 +24,15 @@ final class ChatViewModel: ObservableObject {
               imageDatas: [(data: Data, isVideoFrame: Bool)],
               note: String?, context: ModelContext, appState: AppState) {
         guard !isSending else { return }
-        guard let apiKey = KeychainStore.load(), !apiKey.isEmpty else {
+        let provider = appState.activeProvider
+        guard let apiKey = KeychainStore.load(for: provider), !apiKey.isEmpty else {
             lastError = APIError.noKey.localizedDescription
             return
         }
-        // Model id basi/kosong (mis. key diganti tapi daftar model belum dimuat,
-        // atau ID lama non-free seperti "glm-5.3-flash") → normalisasi ke model free.
-        var modelId = conversation.modelId.isEmpty ? appState.defaultModelId : conversation.modelId
-        if !APInexClient.isFreeModel(modelId) {
-            modelId = appState.defaultModelId
+        // Model id basi/kosong → normalisasi ke model bawaan provider aktif.
+        var modelId = conversation.modelId.isEmpty ? provider.defaultModel : conversation.modelId
+        if !provider.allowsModel(modelId) {
+            modelId = provider.defaultModel
             conversation.modelId = modelId
         }
         guard !modelId.isEmpty else {
@@ -77,17 +77,17 @@ final class ChatViewModel: ObservableObject {
                     // Mode AGENT: AI bisa panggil tools GitHub beneran.
                     // Kalau model tidak support function calling → fallback streaming biasa.
                     do {
-                        full = try await self.agentTurn(apiKey: apiKey, model: modelId,
+                        full = try await self.agentTurn(apiKey: apiKey, provider: provider, model: modelId,
                                                         messages: apiMessages,
                                                         assistantMsg: assistantMsg)
-                    } catch is APInexClient.ToolsNotSupported {
-                        let (t, _) = try await self.streamingTurn(apiKey: apiKey, model: modelId,
+                    } catch is AIClient.ToolsNotSupported {
+                        let (t, _) = try await self.streamingTurn(apiKey: apiKey, provider: provider, model: modelId,
                                                                   messages: apiMessages,
                                                                   assistantMsg: assistantMsg)
                         full = t
                     }
                 } else {
-                    let (t, _) = try await self.streamingTurn(apiKey: apiKey, model: modelId,
+                    let (t, _) = try await self.streamingTurn(apiKey: apiKey, provider: provider, model: modelId,
                                                               messages: apiMessages,
                                                               assistantMsg: assistantMsg)
                     full = t
@@ -97,13 +97,13 @@ final class ChatViewModel: ObservableObject {
                 // 4. Ingatan + ringkasan (background task, diam kalau gagal).
                 if appState.memoryEnabled {
                     Task { @MainActor in
-                        await MemoryService.learnFromExchange(apiKey: apiKey, model: modelId,
+                        await MemoryService.learnFromExchange(apiKey: apiKey, provider: provider, model: modelId,
                                                              userText: trimmed, assistantText: full,
                                                              context: context)
                     }
                 }
                 Task { @MainActor in
-                    await MemoryService.maybeSummarize(apiKey: apiKey, model: modelId,
+                    await MemoryService.maybeSummarize(apiKey: apiKey, provider: provider, model: modelId,
                                                       conversation: conversation, context: context)
                 }
             } catch let e as APIError {
@@ -127,14 +127,14 @@ final class ChatViewModel: ObservableObject {
 
     /// Jalur biasa: streaming dulu, fallback non-streaming.
     /// Mengembalikan (teks lengkap, estimasi token).
-    private func streamingTurn(apiKey: String, model: String,
-                               messages: [APInexClient.APIMessage],
+    private func streamingTurn(apiKey: String, provider: AIProvider, model: String,
+                               messages: [AIClient.APIMessage],
                                assistantMsg: ChatMessage) async throws -> (String, Int) {
         var full = ""
         var streamTokens = 0
         // Coba streaming dulu; kalau server menolak, fallback non-streaming.
         do {
-            for try await token in APInexClient.streamChat(apiKey: apiKey, model: model,
+            for try await token in AIClient.streamChat(apiKey: apiKey, provider: provider, model: model,
                                                            messages: messages) {
                 full += token
                 streamTokens += 1
@@ -144,8 +144,8 @@ final class ChatViewModel: ObservableObject {
             // Token streaming dihitung asli; tambah estimasi prompt.
             let promptEst = messages.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
             TokenUsage.record(tokens: streamTokens + promptEst)
-        } catch is APInexClient.StreamSetupFailed {
-            full = try await APInexClient.sendChat(apiKey: apiKey, model: model,
+        } catch is AIClient.StreamSetupFailed {
+            full = try await AIClient.sendChat(apiKey: apiKey, provider: provider, model: model,
                                                    messages: messages)
             assistantMsg.text = full
             self.streamingText = full
@@ -157,16 +157,16 @@ final class ChatViewModel: ObservableObject {
 
     /// Jalur AGENT: tool loop GitHub (non-streaming).
     /// Selama proses, typing indicator tampil (streamingText kosong + isSending).
-    private func agentTurn(apiKey: String, model: String,
-                           messages: [APInexClient.APIMessage],
+    private func agentTurn(apiKey: String, provider: AIProvider, model: String,
+                           messages: [AIClient.APIMessage],
                            assistantMsg: ChatMessage) async throws -> String {
         var msgs = messages
         var lastText: String? = nil
         for _ in 0..<GitHubAgent.maxIterations {
             try Task.checkCancellation()
-            let (text, calls) = try await APInexClient.sendChatWithTools(
-                apiKey: apiKey, model: model, messages: msgs,
-                tools: APInexClient.githubTools)
+            let (text, calls) = try await AIClient.sendChatWithTools(
+                apiKey: apiKey, provider: provider, model: model, messages: msgs,
+                tools: AIClient.githubTools)
             lastText = text
             guard let calls, !calls.isEmpty else {
                 let final = text ?? ""
@@ -177,11 +177,11 @@ final class ChatViewModel: ObservableObject {
                 return final
             }
             // Rekam pesan asisten + hasil eksekusi tools untuk putaran berikut.
-            msgs.append(APInexClient.APIMessage(
+            msgs.append(AIClient.APIMessage(
                 role: "assistant",
                 content: .text(text ?? ""),
                 toolCalls: calls.map {
-                    APInexClient.APIMessage.ToolCallOut(
+                    AIClient.APIMessage.ToolCallOut(
                         id: $0.id,
                         function: .init(name: $0.function.name,
                                         arguments: $0.function.arguments))
@@ -189,7 +189,7 @@ final class ChatViewModel: ObservableObject {
             for call in calls {
                 let result = await GitHubAgent.execute(name: call.function.name,
                                                        arguments: call.function.arguments)
-                msgs.append(APInexClient.APIMessage(role: "tool",
+                msgs.append(AIClient.APIMessage(role: "tool",
                                                     content: .text(result),
                                                     toolCallId: call.id))
             }
@@ -233,9 +233,9 @@ final class ChatViewModel: ObservableObject {
                                   currentText: String,
                                   currentImages: [(data: Data, isVideoFrame: Bool)],
                                   memoryEnabled: Bool,
-                                  excludeMessageId: UUID) -> [APInexClient.APIMessage] {
+                                  excludeMessageId: UUID) -> [AIClient.APIMessage] {
         var system = """
-        Kamu adalah "ai adnan.120hz", teman ngobrol yang santai dan natural — \
+        Kamu adalah "Siri Ai", teman ngobrol yang santai dan natural — \
         BUKAN robot customer service. Gaya bahasa: santai kayak ngobrol sama teman, \
         tidak kaku, tidak formal/baku, jangan pakai banyak emoji (maksimal 1 sesekali, \
         atau tidak sama sekali). Ikuti bahasa pengguna: kalau dia pakai Bahasa Indonesia \
@@ -281,8 +281,8 @@ final class ChatViewModel: ObservableObject {
             """
         }
 
-        var out: [APInexClient.APIMessage] = [
-            APInexClient.APIMessage(role: "system", content: .text(system))
+        var out: [AIClient.APIMessage] = [
+            AIClient.APIMessage(role: "system", content: .text(system))
         ]
 
         // Riwayat: 20 pesan terakhir (teks saja), tanpa pesan yang sedang dikirim.
@@ -291,22 +291,22 @@ final class ChatViewModel: ObservableObject {
             .filter { $0.role != "system" && !$0.text.isEmpty }
             .suffix(20)
         for m in history where m.id != excludeMessageId && (m.role == "user" || m.role == "assistant") {
-            out.append(APInexClient.APIMessage(role: m.role, content: .text(m.text)))
+            out.append(AIClient.APIMessage(role: m.role, content: .text(m.text)))
         }
 
         // Pesan saat ini (dengan gambar kalau ada).
         // Vision: selalu sertakan text part — banyak server menolak payload
         // yang hanya berisi image tanpa teks.
         if currentImages.isEmpty {
-            out.append(APInexClient.APIMessage(role: "user", content: .text(currentText)))
+            out.append(AIClient.APIMessage(role: "user", content: .text(currentText)))
         } else {
-            var parts: [APInexClient.ContentPart] = []
+            var parts: [AIClient.ContentPart] = []
             let caption = currentText.isEmpty ? "Tolong analisis dan jelaskan gambar ini." : currentText
             parts.append(.text(caption))
             for img in currentImages {
                 parts.append(.image(dataURL: MediaService.dataURL(jpeg: img.data)))
             }
-            out.append(APInexClient.APIMessage(role: "user", content: .parts(parts)))
+            out.append(AIClient.APIMessage(role: "user", content: .parts(parts)))
         }
         return out
     }

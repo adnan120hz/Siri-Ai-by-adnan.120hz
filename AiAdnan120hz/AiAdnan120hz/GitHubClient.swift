@@ -116,7 +116,7 @@ struct GitHubClient {
         req.httpMethod = "GET"
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        req.setValue(APInexClient.userAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue(AIClient.userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 30
         let (data, response): (Data, URLResponse)
         do {
@@ -170,7 +170,7 @@ struct GitHubClient {
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.setValue(APInexClient.userAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue(AIClient.userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 60
         let (data, response): (Data, URLResponse)
         do {
@@ -221,7 +221,7 @@ struct GitHubClient {
         req.httpMethod = method
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        req.setValue(APInexClient.userAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue(AIClient.userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 30
         if let jsonBody {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")

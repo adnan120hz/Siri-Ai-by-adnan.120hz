@@ -1,6 +1,7 @@
 import Foundation
 
-// MARK: - APInex (OpenAI-compatible) — semua lewat URLSession, tanpa fake.
+// MARK: - AIClient (OpenAI-compatible) — semua lewat URLSession, tanpa fake.
+// Mendukung dua provider: APInex dan NVIDIA NIM. Provider dipilih user di APIKeyView.
 
 enum APIError: LocalizedError {
     case noKey
@@ -28,9 +29,7 @@ enum APIError: LocalizedError {
 
 // MARK: - Model payload
 
-struct APInexClient {
-    static let baseURL = URL(string: "https://api.apinex.bond/v1")!
-
+struct AIClient {
     /// User-Agent browser-like: beberapa gateway/WAF menolak request tanpa UA.
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
@@ -39,8 +38,8 @@ struct APInexClient {
     struct ModelItem: Decodable { var id: String }
     struct ModelList: Decodable { var data: [ModelItem]? }
 
-    static func fetchModels(apiKey: String) async throws -> [String] {
-        var req = URLRequest(url: baseURL.appendingPathComponent("models"))
+    static func fetchModels(apiKey: String, provider: AIProvider) async throws -> [String] {
+        var req = URLRequest(url: provider.baseURL.appendingPathComponent("models"))
         req.httpMethod = "GET"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
@@ -282,12 +281,7 @@ struct APInexClient {
         var error: Detail?
     }
 
-    // MARK: - Model free saja (prefix "free/")
-
-    /// App ini HANYA memakai model free. Jangan pernah pakai ID tanpa prefix "free/".
-    static func isFreeModel(_ id: String) -> Bool {
-        id.lowercased().hasPrefix("free/")
-    }
+    // MARK: - Daftar model yang boleh dipakai (aturan per provider)
 
     /// Daftar fallback kalau /models kosong/gagal — 16 model free apinex.bond.
     static let freeModelFallback: [String] = [
@@ -309,18 +303,18 @@ struct APInexClient {
         "free/hy4",
     ]
 
-    /// Ambil daftar model dari server, saring HANYA yang free/.
-    /// Kalau hasil saringan kosong → pakai fallback.
-    static func fetchFreeModels(apiKey: String) async throws -> [String] {
-        let all = try await fetchModels(apiKey: apiKey)
-        let free = all.filter { isFreeModel($0) }
-        return free.isEmpty ? freeModelFallback : free
+    /// Ambil daftar model dari server, saring sesuai aturan provider.
+    /// Kalau hasil saringan kosong → pakai fallback provider.
+    static func fetchAllowedModels(apiKey: String, provider: AIProvider) async throws -> [String] {
+        let all = try await fetchModels(apiKey: apiKey, provider: provider)
+        let allowed = all.filter { provider.allowsModel($0) }
+        return allowed.isEmpty ? provider.modelFallback : allowed
     }
 
-    private static func makeRequest(apiKey: String, model: String,
+    private static func makeRequest(apiKey: String, provider: AIProvider, model: String,
                                    messages: [APIMessage], stream: Bool,
                                    tools: [ToolDef]? = nil) -> URLRequest {
-        var req = URLRequest(url: baseURL.appendingPathComponent("chat/completions"))
+        var req = URLRequest(url: provider.baseURL.appendingPathComponent("chat/completions"))
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -336,9 +330,9 @@ struct APInexClient {
     }
 
     /// Non-streaming. Selalu mengembalikan body error asli saat HTTP != 200.
-    static func sendChat(apiKey: String, model: String,
+    static func sendChat(apiKey: String, provider: AIProvider, model: String,
                          messages: [APIMessage]) async throws -> String {
-        let req = makeRequest(apiKey: apiKey, model: model, messages: messages, stream: false)
+        let req = makeRequest(apiKey: apiKey, provider: provider, model: model, messages: messages, stream: false)
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await URLSession.shared.data(for: req)
@@ -367,10 +361,10 @@ struct APInexClient {
 
     /// Non-streaming dengan tools. Mengembalikan (teks jawaban, tool calls).
     /// Melempar `ToolsNotSupported` kalau server/gateway menolak parameter tools.
-    static func sendChatWithTools(apiKey: String, model: String,
+    static func sendChatWithTools(apiKey: String, provider: AIProvider, model: String,
                                   messages: [APIMessage],
                                   tools: [ToolDef]) async throws -> (String?, [ToolCall]?) {
-        let req = makeRequest(apiKey: apiKey, model: model, messages: messages,
+        let req = makeRequest(apiKey: apiKey, provider: provider, model: model, messages: messages,
                               stream: false, tools: tools)
         let (data, response): (Data, URLResponse)
         do {
@@ -403,9 +397,9 @@ struct APInexClient {
     /// bisa fallback ke non-streaming (yang memberi body error lengkap).
     struct StreamSetupFailed: Error { var status: Int }
 
-    static func streamChat(apiKey: String, model: String,
+    static func streamChat(apiKey: String, provider: AIProvider, model: String,
                            messages: [APIMessage]) -> AsyncThrowingStream<String, Error> {
-        let req = makeRequest(apiKey: apiKey, model: model, messages: messages, stream: true)
+        let req = makeRequest(apiKey: apiKey, provider: provider, model: model, messages: messages, stream: true)
         return AsyncThrowingStream { continuation in
             Task {
                 do {

@@ -1,9 +1,11 @@
 import SwiftUI
 
-// MARK: - Layar API key: tempel → simpan (Keychain) / hapus. Tanpa akun, tanpa login.
+// MARK: - Layar API key dual provider: APInex / NVIDIA NIM.
+// Cukup isi SATU. Key disimpan terpisah per provider di Keychain. Tanpa akun, tanpa login.
 
 struct APIKeyView: View {
     @EnvironmentObject var appState: AppState
+    @State private var provider: AIProvider = .apinex
     @State private var keyInput = ""
     @State private var message: String?
     @State private var isError = false
@@ -13,12 +15,30 @@ struct APIKeyView: View {
         NavigationStack {
             Form {
                 Section {
+                    Picker("Penyedia", selection: $provider) {
+                        ForEach(AIProvider.allCases) { p in
+                            Text(p.title).tag(p)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    Text("Cukup isi satu — tidak harus dua-duanya.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("API Key apinex.bond")
+                        Text("API Key \(provider.title)")
                             .font(.headline)
-                        Text("Tempel API key kamu dari apinex.bond. Key hanya disimpan di Keychain HP ini — tidak dikirim ke mana pun selain api.apinex.bond saat chat.")
+                        Text(provider.keyHelp)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                        Text(provider.keyDestinationNote)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Link(provider.keyGetLinkText, destination: provider.keyGetURL)
+                            .font(.footnote)
+                            .fontWeight(.semibold)
                     }
                     .padding(.vertical, 4)
 
@@ -30,15 +50,25 @@ struct APIKeyView: View {
                         .disabled(keyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isValidating)
                 }
 
-                if appState.hasAPIKey {
-                    Section(header: Text("Status")) {
+                Section(header: Text("Status per provider")) {
+                    ForEach(AIProvider.allCases) { p in
                         HStack {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                            Text("Key terpasang: \(appState.keyMasked)")
+                            Image(systemName: appState.hasKey(for: p) ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundStyle(appState.hasKey(for: p) ? .green : .red)
+                            Text(p.title)
                                 .font(.subheadline)
+                            Spacer()
+                            if appState.hasKey(for: p) {
+                                Text(appState.maskedKey(for: p))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                        Button("Hapus Key", role: .destructive) { Task { @MainActor in remove() } }
+                        .contentShape(Rectangle())
+                        .onTapGesture { provider = p }
+                    }
+                    if appState.hasKey(for: provider) {
+                        Button("Hapus Key \(provider.title)", role: .destructive) { Task { @MainActor in remove() } }
                     }
                 }
 
@@ -57,6 +87,7 @@ struct APIKeyView: View {
                 }
             }
             .navigationTitle(appState.hasAPIKey ? "API Key" : "Selamat datang")
+            .onAppear { provider = appState.activeProvider }
         }
     }
 
@@ -66,28 +97,27 @@ struct APIKeyView: View {
         guard !key.isEmpty else { return }
         // Simpan dulu ke Keychain, lalu VALIDASI ke server: kalau key salah /
         // revoked, user langsung tahu alasannya saat ini juga — bukan pas chat.
-        guard KeychainStore.save(key) else {
+        guard KeychainStore.save(key, for: provider) else {
             message = "Gagal menyimpan ke Keychain."
             isError = true
             return
         }
         keyInput = ""
+        appState.activeProvider = provider
         appState.refreshKeyStatus()
         isValidating = true
         message = "Key tersimpan. Memeriksa ke server…"
         isError = false
         Task { @MainActor in
             do {
-                // Hanya model free (prefix "free/"). Tidak ada probe paid.
-                let models = try await APInexClient.fetchFreeModels(apiKey: key)
+                let models = try await AIClient.fetchAllowedModels(apiKey: key, provider: provider)
                 await MainActor.run {
                     appState.availableModels = models
-                    // Model lama bisa jadi ID non-free (mis. "glm-5.3-flash") → reset ke free.
                     let cur = appState.defaultModelId
-                    if !models.contains(cur) {
-                        appState.defaultModelId = models.first ?? ""
+                    if !provider.allowsModel(cur) || !models.contains(cur) {
+                        appState.defaultModelId = models.first ?? provider.defaultModel
                     }
-                    message = "Key valid — \(models.count) model free tersedia."
+                    message = "Key valid — \(models.count) model tersedia."
                     isError = false
                     isValidating = false
                 }
@@ -104,11 +134,14 @@ struct APIKeyView: View {
 
     @MainActor
     private func remove() {
-        if KeychainStore.remove() {
+        if KeychainStore.remove(for: provider) {
             appState.refreshKeyStatus()
-            appState.availableModels = []
-            appState.defaultModelId = ""
-            message = "Key dihapus."
+            // Kalau key yang dihapus milik provider aktif, kosongkan daftar model.
+            if provider == appState.activeProvider {
+                appState.availableModels = []
+                appState.defaultModelId = ""
+            }
+            message = "Key \(provider.title) dihapus."
             isError = false
         } else {
             message = "Gagal menghapus key."

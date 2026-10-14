@@ -28,7 +28,7 @@ enum MemoryService {
 
     /// Ekstrak fakta tahan lama dari pertukaran terakhir.
     /// Dipanggil sebagai `Task { await ... }` dari konteks @MainActor.
-    static func learnFromExchange(apiKey: String, model: String,
+    static func learnFromExchange(apiKey: String, provider: AIProvider, model: String,
                                   userText: String, assistantText: String,
                                   context: ModelContext) async {
         guard userText.count > 20 else { return }
@@ -39,9 +39,9 @@ enum MemoryService {
         Pengguna: \(userText.prefix(1500))
         Asisten: \(assistantText.prefix(1500))
         """
-        let msg = APInexClient.APIMessage(role: "user", content: .text(prompt))
+        let msg = AIClient.APIMessage(role: "user", content: .text(prompt))
         do {
-            let raw = try await APInexClient.sendChat(apiKey: apiKey, model: model, messages: [msg])
+            let raw = try await AIClient.sendChat(apiKey: apiKey, provider: provider, model: model, messages: [msg])
             TokenUsage.record(tokens: TokenUsage.estimateTokens(for: prompt) + TokenUsage.estimateTokens(for: raw))
             guard let data = raw.data(using: .utf8),
                   let facts = try? JSONDecoder().decode([String].self, from: data),
@@ -59,16 +59,16 @@ enum MemoryService {
     }
 
     /// Ringkas 20 pesan tertua jadi summary kalau obrolan sudah panjang.
-    static func maybeSummarize(apiKey: String, model: String,
+    static func maybeSummarize(apiKey: String, provider: AIProvider, model: String,
                                conversation: Conversation, context: ModelContext) async {
         let count = conversation.messages.count
         guard count > 40 else { return }
         let oldest = conversation.messages.sorted { $0.createdAt < $1.createdAt }.prefix(20)
             .map { "[\($0.role)]: \($0.text.prefix(800))" }.joined(separator: "\n")
         let prompt = "Ringkas percakapan berikut jadi 5-8 baris padat (Bahasa Indonesia):\n\(oldest)"
-        let msg = APInexClient.APIMessage(role: "user", content: .text(prompt))
+        let msg = AIClient.APIMessage(role: "user", content: .text(prompt))
         do {
-            let summary = try await APInexClient.sendChat(apiKey: apiKey, model: model, messages: [msg])
+            let summary = try await AIClient.sendChat(apiKey: apiKey, provider: provider, model: model, messages: [msg])
             TokenUsage.record(tokens: TokenUsage.estimateTokens(for: prompt) + TokenUsage.estimateTokens(for: summary))
             conversation.summary = summary
             try? context.save()

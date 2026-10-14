@@ -1,9 +1,9 @@
-# Ai Adnan.120hz
+# Siri Ai
 
 ![Build IPA](https://github.com/adnan120hz/Adnan.120hz-Ai/actions/workflows/build.yml/badge.svg)
 
-Aplikasi chat AI untuk iOS, ditenagai API key [apinex.bond](https://apinex.bond) milikmu sendiri.
-Tanpa akun, tanpa login — cuma tempel API key sekali, key disimpan di Keychain HP.
+Aplikasi chat AI untuk iOS ala Siri, ditenagai API key [apinex.bond](https://apinex.bond) atau [NVIDIA NIM](https://build.nvidia.com) milikmu sendiri.
+Tanpa akun, tanpa login — cukup isi satu provider, key disimpan di Keychain HP.
 
 ## Fitur
 
