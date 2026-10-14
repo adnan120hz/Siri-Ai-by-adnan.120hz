@@ -114,18 +114,15 @@ final class ChatViewModel: ObservableObject {
                     // Kalau model tidak support function calling → fallback streaming biasa.
                     do {
                         return try await self.agentTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
-                                                        messages: taskApiMessages,
-                                                        assistantMsg: taskAssistantMsg)
+                                                        messages: taskApiMessages)
                     } catch is AIClient.ToolsNotSupported {
                         let (t, _) = try await self.streamingTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
-                                                                  messages: taskApiMessages,
-                                                                  assistantMsg: taskAssistantMsg)
+                                                                  messages: taskApiMessages)
                         return t
                     }
                 } else {
                     let (t, _) = try await self.streamingTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
-                                                              messages: taskApiMessages,
-                                                              assistantMsg: taskAssistantMsg)
+                                                              messages: taskApiMessages)
                     return t
                 }
             }
@@ -150,6 +147,7 @@ final class ChatViewModel: ObservableObject {
                     }
                 }
                 print("[SiriAi] response OK (\(full.count) chars)")
+                taskAssistantMsg.text = full
                 taskAssistantMsg.errorText = nil
                 try? context.save()
                 // 4. Ingatan + ringkasan (background task, diam kalau gagal).
@@ -188,8 +186,7 @@ final class ChatViewModel: ObservableObject {
     /// Jalur biasa: streaming dulu, fallback non-streaming.
     /// Mengembalikan (teks lengkap, estimasi token).
     private func streamingTurn(apiKey: String, provider: AIProvider, model: String,
-                               messages: [AIClient.APIMessage],
-                               assistantMsg: ChatMessage) async throws -> (String, Int) {
+                               messages: [AIClient.APIMessage]) async throws -> (String, Int) {
         var full = ""
         var streamTokens = 0
         // Coba streaming dulu; kalau server menolak, fallback non-streaming.
@@ -200,7 +197,6 @@ final class ChatViewModel: ObservableObject {
                 full += token
                 streamTokens += 1
                 self.streamingText = full
-                assistantMsg.text = full
             }
             // Token streaming dihitung asli; tambah estimasi prompt.
             let promptEst = messages.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
@@ -209,7 +205,6 @@ final class ChatViewModel: ObservableObject {
             print("[SiriAi] stream setup failed; falling back to non-streaming")
             full = try await AIClient.sendChat(apiKey: apiKey, provider: provider, model: model,
                                                    messages: messages)
-            assistantMsg.text = full
             self.streamingText = full
             let promptEst = messages.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
             TokenUsage.record(tokens: promptEst + TokenUsage.estimateTokens(for: full))
@@ -220,8 +215,7 @@ final class ChatViewModel: ObservableObject {
     /// Jalur AGENT: tool loop GitHub (non-streaming).
     /// Selama proses, typing indicator tampil (streamingText kosong + isSending).
     private func agentTurn(apiKey: String, provider: AIProvider, model: String,
-                           messages: [AIClient.APIMessage],
-                           assistantMsg: ChatMessage) async throws -> String {
+                           messages: [AIClient.APIMessage]) async throws -> String {
         var msgs = messages
         var lastText: String? = nil
         for _ in 0..<GitHubAgent.maxIterations {
@@ -232,7 +226,6 @@ final class ChatViewModel: ObservableObject {
             lastText = text
             guard let calls, !calls.isEmpty else {
                 let final = text ?? ""
-                assistantMsg.text = final
                 self.streamingText = final
                 let promptEst = msgs.reduce(0) { $0 + TokenUsage.estimateTokens(for: $1.debugText) }
                 TokenUsage.record(tokens: promptEst + TokenUsage.estimateTokens(for: final))
@@ -257,7 +250,6 @@ final class ChatViewModel: ObservableObject {
             }
         }
         let final = lastText ?? ""
-        assistantMsg.text = final
         self.streamingText = final
         return final
     }

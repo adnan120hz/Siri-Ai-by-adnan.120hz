@@ -28,6 +28,7 @@ enum MemoryService {
 
     /// Ekstrak fakta tahan lama dari pertukaran terakhir.
     /// Dipanggil sebagai `Task { await ... }` dari konteks @MainActor.
+    @MainActor
     static func learnFromExchange(apiKey: String, provider: AIProvider, model: String,
                                   userText: String, assistantText: String,
                                   context: ModelContext) async {
@@ -59,6 +60,7 @@ enum MemoryService {
     }
 
     /// Ringkas 20 pesan tertua jadi summary kalau obrolan sudah panjang.
+    @MainActor
     static func maybeSummarize(apiKey: String, provider: AIProvider, model: String,
                                conversation: Conversation, context: ModelContext) async {
         let count = conversation.messages.count
