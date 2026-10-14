@@ -94,76 +94,88 @@ final class ChatViewModel: ObservableObject {
 
         print("[SiriAi] send(): provider=\(provider.rawValue) model=\(modelId) text=\(trimmed.prefix(60)) images=\(imageDatas.count)")
 
+        // Capture immutable copies for the Task (Swift 6 concurrency).
+        let taskModelId = modelId
+        let taskAssistantMsg = assistantMsg
+        let taskApiMessages = apiMessages
+        let taskProvider = provider
+        let taskApiKey = apiKey
+        let taskTrimmed = trimmed
+        let taskImageDatas = imageDatas
+        let taskConversation = conversation
+        let taskNote = note
+
         streamTask = Task { @MainActor in
             // Satu putaran kirim (dipanggil 2x kalau retry).
-            func runTurn() async throws -> String {
+            func runTurn(model: String) async throws -> String {
                 let ghConnected = !(GitHubStore.load() ?? "").isEmpty
                 if ghConnected {
                     // Mode AGENT: AI bisa panggil tools GitHub beneran.
                     // Kalau model tidak support function calling → fallback streaming biasa.
                     do {
-                        return try await self.agentTurn(apiKey: apiKey, provider: provider, model: modelId,
-                                                        messages: apiMessages,
-                                                        assistantMsg: assistantMsg)
+                        return try await self.agentTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
+                                                        messages: taskApiMessages,
+                                                        assistantMsg: taskAssistantMsg)
                     } catch is AIClient.ToolsNotSupported {
-                        let (t, _) = try await self.streamingTurn(apiKey: apiKey, provider: provider, model: modelId,
-                                                                  messages: apiMessages,
-                                                                  assistantMsg: assistantMsg)
+                        let (t, _) = try await self.streamingTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
+                                                                  messages: taskApiMessages,
+                                                                  assistantMsg: taskAssistantMsg)
                         return t
                     }
                 } else {
-                    let (t, _) = try await self.streamingTurn(apiKey: apiKey, provider: provider, model: modelId,
-                                                              messages: apiMessages,
-                                                              assistantMsg: assistantMsg)
+                    let (t, _) = try await self.streamingTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
+                                                              messages: taskApiMessages,
+                                                              assistantMsg: taskAssistantMsg)
                     return t
                 }
             }
 
+            var currentModelId = taskModelId
             do {
                 let full: String
                 do {
-                    full = try await runTurn()
+                    full = try await runTurn(model: currentModelId)
                 } catch let e as APIError {
                     // NVIDIA me-list model yang belum tentu ter-deploy di akun user → 404.
                     // Coba sekali lagi dengan model default provider sebelum menyerah.
                     if case .http(let status, _) = e, (status == 404 || status == 400),
-                       modelId != provider.defaultModel {
-                        print("[SiriAi] HTTP \(status) for model \(modelId); retrying once with default \(provider.defaultModel)")
-                        modelId = provider.defaultModel
-                        conversation.modelId = modelId
+                       currentModelId != taskProvider.defaultModel {
+                        print("[SiriAi] HTTP \(status) for model \(currentModelId); retrying once with default \(taskProvider.defaultModel)")
+                        currentModelId = taskProvider.defaultModel
+                        taskConversation.modelId = currentModelId
                         try? context.save()
-                        full = try await runTurn()
+                        full = try await runTurn(model: currentModelId)
                     } else {
                         throw e
                     }
                 }
                 print("[SiriAi] response OK (\(full.count) chars)")
-                assistantMsg.errorText = nil
+                taskAssistantMsg.errorText = nil
                 try? context.save()
                 // 4. Ingatan + ringkasan (background task, diam kalau gagal).
                 if appState.memoryEnabled {
                     Task { @MainActor in
-                        await MemoryService.learnFromExchange(apiKey: apiKey, provider: provider, model: modelId,
-                                                             userText: trimmed, assistantText: full,
+                        await MemoryService.learnFromExchange(apiKey: taskApiKey, provider: taskProvider, model: currentModelId,
+                                                             userText: taskTrimmed, assistantText: full,
                                                              context: context)
                     }
                 }
                 Task { @MainActor in
-                    await MemoryService.maybeSummarize(apiKey: apiKey, provider: provider, model: modelId,
-                                                      conversation: conversation, context: context)
+                    await MemoryService.maybeSummarize(apiKey: taskApiKey, provider: taskProvider, model: currentModelId,
+                                                      conversation: taskConversation, context: context)
                 }
             } catch let e as APIError {
                 print("[SiriAi] APIError: \(e.localizedDescription.prefix(200))")
-                assistantMsg.text = ""
-                let desc = Self.visionHintIfNeeded(e.localizedDescription, hadImages: !imageDatas.isEmpty)
-                assistantMsg.errorText = desc
+                taskAssistantMsg.text = ""
+                let desc = Self.visionHintIfNeeded(e.localizedDescription, hadImages: !taskImageDatas.isEmpty)
+                taskAssistantMsg.errorText = desc
                 self.lastError = desc
                 try? context.save()
             } catch {
                 print("[SiriAi] error: \(error.localizedDescription.prefix(200))")
                 var desc = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                desc = Self.visionHintIfNeeded(desc, hadImages: !imageDatas.isEmpty)
-                assistantMsg.errorText = desc
+                desc = Self.visionHintIfNeeded(desc, hadImages: !taskImageDatas.isEmpty)
+                taskAssistantMsg.errorText = desc
                 self.lastError = desc
                 try? context.save()
             }
