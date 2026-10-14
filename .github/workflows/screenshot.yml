@@ -26,27 +26,44 @@ jobs:
             -derivedDataPath ./DerivedData \
             build 2>&1 | tail -20
 
-      - name: Boot simulator and install app
+      - name: Prepare simulator
         run: |
+          # Shutdown any booted devices first (avoid hang)
+          xcrun simctl shutdown all || true
+          sleep 3
           SIM=$(xcrun simctl list devices available | grep "iPhone 17" | head -1 | grep -oE '[A-F0-9-]{36}' | head -1)
           echo "SIM=$SIM" >> $GITHUB_ENV
+          echo "Using simulator: $SIM"
+          # Boot with timeout
           xcrun simctl boot "$SIM" || true
-          sleep 10
+          # Wait for boot with timeout (max 90s)
+          for i in $(seq 1 18); do
+            if xcrun simctl bootstatus "$SIM" 2>&1 | grep -q "booted"; then
+              echo "Simulator booted"
+              break
+            fi
+            echo "Waiting for boot... ($i/18)"
+            sleep 5
+          done
           APP_PATH=$(find ./DerivedData -name "AiAdnan120hz.app" | head -1)
           echo "APP=$APP_PATH" >> $GITHUB_ENV
+          echo "App: $APP_PATH"
           xcrun simctl install "$SIM" "$APP_PATH"
 
       - name: Launch and screenshot
+        timeout-minutes: 5
         run: |
           mkdir -p screenshots
-          # Launch app
-          xcrun simctl launch "$SIM" com.adnan120hz.aiadnan120hz
-          sleep 8
-          # Screenshot 1: history/empty state
-          xcrun simctl io "$SIM" screenshot screenshots/01-history.png
+          # Launch app with timeout
+          timeout 30 xcrun simctl launch "$SIM" com.adnan120hz.aiadnan120hz || echo "Launch done or timed out"
+          sleep 5
+          # Screenshot 1: initial state (conversations/history)
+          xcrun simctl io "$SIM" screenshot screenshots/01-conversations.png
+          echo "Screenshot 1 taken"
           sleep 2
-          # Screenshot 2: after a moment (same screen, stability check)
-          xcrun simctl io "$SIM" screenshot screenshots/02-main.png
+          # Screenshot 2: stability check
+          xcrun simctl io "$SIM" screenshot screenshots/02-conversations-2.png
+          echo "Screenshot 2 taken"
           ls -lh screenshots/
 
       - name: Upload screenshots
