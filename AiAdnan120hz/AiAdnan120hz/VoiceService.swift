@@ -7,12 +7,21 @@ import Speech
 //
 // TIDAK pakai AVAudioEngine.installTap — rawan NSException (tidak bisa di-catch Swift)
 // yang bikin force close. Rekam ke file .m4a dulu, lalu transcribe file.
+//
+// Anti-spam: state machine (idle → preparing → recording → transcribing → idle).
+// Tap berkali-kali saat preparing/recording/transcribing = diabaikan, tidak crash.
 
 @MainActor
 final class VoiceService: ObservableObject {
+    private enum Phase { case idle, preparing, recording, transcribing }
+
     @Published var isRecording = false
     @Published var transcript = ""
     @Published var permissionError: String?
+
+    private var phase: Phase = .idle
+    /// Token untuk membatalkan persiapan yang masih in-flight (mis. dialog izin kebuka lalu user tap stop).
+    private var preparingToken = UUID()
 
     private var recognizer: SFSpeechRecognizer?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -63,23 +72,27 @@ final class VoiceService: ObservableObject {
     }
 
     // MARK: - Speech-to-text (via AVAudioRecorder → file → SFSpeechURLRecognitionRequest)
-    //
-    // TIDAK pakai AVAudioEngine.installTap — rawan NSException (tidak bisa di-catch Swift).
-    // Rekam ke file .m4a, lalu transcribe file. Jauh lebih stabil.
 
-    /// Mulai merekam. Hasil masuk ke `transcript` setelah stop.
+    /// Mulai merekam. Spam-tap aman: hanya jalan dari fase idle.
+    /// Hasil masuk ke `transcript` setelah stop.
     func startRecording() async {
-        guard !isRecording else { return }
+        // Guard anti-spam: tolak kalau bukan idle. Phase langsung preparing
+        // SEBELUM await pertama, jadi tap kedua tidak bisa lolos.
+        guard phase == .idle else { return }
+        phase = .preparing
+        let token = UUID()
+        preparingToken = token
 
-        // Guard 1: izin mic + speech.
-        if AVAudioSession.sharedInstance().recordPermission != .granted {
-            guard await requestPermissions() else { return }
-        } else {
-            let s = SFSpeechRecognizer.authorizationStatus()
-            if s != .authorized {
-                guard await requestPermissions() else { return }
+        // Guard 1: izin mic + speech (hanya minta kalau belum granted).
+        if AVAudioSession.sharedInstance().recordPermission != .granted
+            || SFSpeechRecognizer.authorizationStatus() != .authorized {
+            guard await requestPermissions() else {
+                if phase == .preparing { phase = .idle }
+                return
             }
         }
+        // Batal kalau user tap stop saat dialog izin masih kebuka.
+        guard token == preparingToken, phase == .preparing else { return }
 
         // Guard 2: locale.
         let locale = Locale(identifier: "id-ID")
@@ -90,6 +103,7 @@ final class VoiceService: ObservableObject {
         }
         guard let recognizer, recognizer.isAvailable else {
             permissionError = "Speech recognizer tidak tersedia saat ini (butuh internet)."
+            phase = .idle
             return
         }
 
@@ -100,6 +114,7 @@ final class VoiceService: ObservableObject {
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             permissionError = "Gagal menyiapkan audio: \(error.localizedDescription)"
+            phase = .idle
             return
         }
 
@@ -117,33 +132,72 @@ final class VoiceService: ObservableObject {
             audioRecorder = try AVAudioRecorder(url: recordingURL, settings: settings)
         } catch {
             permissionError = "Gagal mulai merekam: \(error.localizedDescription)"
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            deactivateSession()
+            phase = .idle
             return
         }
 
         guard let recorder = audioRecorder, recorder.record() else {
             permissionError = "Gagal mulai merekam."
             audioRecorder = nil
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            deactivateSession()
+            phase = .idle
+            return
+        }
+
+        // Cek terakhir sebelum go-live (user bisa tap stop di tengah jalan).
+        guard token == preparingToken, phase == .preparing else {
+            recorder.stop()
+            audioRecorder = nil
+            deactivateSession()
             return
         }
 
         transcript = ""
+        phase = .recording
         isRecording = true
     }
 
+    /// Stop merekam lalu transcribe file. Aman dipanggil berkali-kali.
     func stopRecording() {
-        guard isRecording else { return }
-        isRecording = false
-        audioRecorder?.stop()
-        audioRecorder = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        switch phase {
+        case .idle, .transcribing:
+            return
+        case .preparing:
+            // Batalkan persiapan in-flight (dialog izin masih kebuka).
+            preparingToken = UUID()
+            phase = .idle
+        case .recording:
+            phase = .transcribing
+            isRecording = false
+            audioRecorder?.stop()
+            audioRecorder = nil
+            deactivateSession()
+            transcribeFile()
+        }
+    }
 
-        // Transcribe file yang baru direkam.
-        guard let recognizer else { return }
-        let request = SFSpeechURLRecognitionRequest(url: recordingURL)
-        request.shouldReportPartialResults = false
+    /// Batalkan recognition task dengan aman (cancel + nil). Dipanggil sebelum task baru.
+    private func cancelRecognition() {
         recognitionTask?.cancel()
+        recognitionTask = nil
+    }
+
+    private func transcribeFile() {
+        cancelRecognition()
+        let url = recordingURL
+        // Pastikan file ada dan tidak kosong — jangan transcribe file hantu.
+        guard let size = try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int,
+              size > 0 else {
+            phase = .idle
+            return
+        }
+        guard let recognizer, recognizer.isAvailable else {
+            phase = .idle
+            return
+        }
+        let request = SFSpeechURLRecognitionRequest(url: url)
+        request.shouldReportPartialResults = false
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -154,8 +208,15 @@ final class VoiceService: ObservableObject {
                     // Diam — transcript tetap kosong, user bisa ketik manual.
                 }
                 self.recognitionTask = nil
+                self.phase = .idle
             }
         }
+    }
+
+    private func deactivateSession() {
+        // Jangan nonaktifkan saat TTS lagi ngomong.
+        guard !synthesizer.isSpeaking else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     // MARK: - Text-to-speech
@@ -165,12 +226,15 @@ final class VoiceService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         stopSpeaking()
-        do {
-            // Pakai playback agar suara keluar walau silent switch nyala.
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: .duckOthers)
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            // Tetap coba speak tanpa session khusus.
+        // Jangan utak-atik audio session saat lagi merekam — recorder bisa keganggu.
+        if phase != .recording {
+            do {
+                // Pakai playback agar suara keluar walau silent switch nyala.
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: .duckOthers)
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                // Tetap coba speak tanpa session khusus.
+            }
         }
         let utterance = AVSpeechUtterance(string: trimmed)
         utterance.voice = AVSpeechSynthesisVoice(language: "id-ID")
