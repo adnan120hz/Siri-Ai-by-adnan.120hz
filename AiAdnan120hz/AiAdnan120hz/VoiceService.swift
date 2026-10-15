@@ -82,17 +82,24 @@ final class VoiceService: ObservableObject {
         phase = .preparing
         let token = UUID()
         preparingToken = token
+        print("[SiriAi] Voice: startRecording begin")
 
         // Guard 1: izin mic + speech (hanya minta kalau belum granted).
         if AVAudioSession.sharedInstance().recordPermission != .granted
             || SFSpeechRecognizer.authorizationStatus() != .authorized {
+            print("[SiriAi] Voice: requesting permissions")
             guard await requestPermissions() else {
+                print("[SiriAi] Voice: permissions denied")
                 if phase == .preparing { phase = .idle }
                 return
             }
+            print("[SiriAi] Voice: permissions granted")
         }
         // Batal kalau user tap stop saat dialog izin masih kebuka.
-        guard token == preparingToken, phase == .preparing else { return }
+        guard token == preparingToken, phase == .preparing else {
+            print("[SiriAi] Voice: cancelled during permission")
+            return
+        }
 
         // Guard 2: locale.
         let locale = Locale(identifier: "id-ID")
@@ -106,6 +113,7 @@ final class VoiceService: ObservableObject {
             phase = .idle
             return
         }
+        print("[SiriAi] Voice: recognizer ready")
 
         // Guard 3: audio session.
         do {
