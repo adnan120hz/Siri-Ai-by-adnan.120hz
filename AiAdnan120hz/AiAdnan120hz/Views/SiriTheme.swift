@@ -148,3 +148,36 @@ struct SiriOrbFaint: View {
         .accessibilityHidden(true)
     }
 }
+
+// MARK: - Loading bubble: logo mengembang (breathing) + refleksi di bawah.
+// Muncul saat user sudah kirim pesan dan AI sedang merespons.
+struct SiriLoadingBubble: View {
+    @State private var breathe = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Image("SiriOrb")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 56, height: 56)
+                .clipShape(Circle())
+            // Refleksi: logo dibalik vertikal, memudar ke bawah.
+            Image("SiriOrb")
+                .resizable()
+                .scaledToFill()
+                .frame(width: 56, height: 28)
+                .scaleEffect(x: 1, y: -1)
+                .mask(
+                    LinearGradient(
+                        colors: [.black.opacity(0.3), .clear],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .opacity(0.5)
+        }
+        .scaleEffect(breathe ? 1.12 : 1.0)
+        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: breathe)
+        .onAppear { breathe = true }
+        .accessibilityHidden(true)
+    }
+}

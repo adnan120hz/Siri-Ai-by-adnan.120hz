@@ -56,7 +56,7 @@ struct ChatView: View {
                 ScrollView {
                     LazyVStack(spacing: SiriTheme.m) {
                         if messages.isEmpty {
-                            SiriOrbFaint(animate: true)
+                            SiriOrbFaint(animate: false)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .padding(.top, 120)
                         } else {
@@ -76,8 +76,7 @@ struct ChatView: View {
                             }
                             if viewModel.isSending && viewModel.streamingText.isEmpty {
                                 HStack {
-                                    ProgressView()
-                                        .controlSize(.small)
+                                    SiriLoadingBubble()
                                     Spacer()
                                 }
                                 .padding(.leading, SiriTheme.m)
