@@ -154,7 +154,7 @@ struct ConversationsView: View {
                 } label: {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Search"))
@@ -184,7 +184,7 @@ struct ConversationsView: View {
                     } label: {
                         Image(systemName: "square.and.pencil")
                             .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(.black)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text("New chat"))
