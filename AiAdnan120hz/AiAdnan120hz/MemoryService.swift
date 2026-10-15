@@ -76,4 +76,30 @@ enum MemoryService {
             try? context.save()
         } catch { /* diam */ }
     }
+
+    /// Generate judul singkat dari topik percakapan via AI (maks 5 kata).
+    /// Dipanggil sekali setelah pesan pertama terkirim.
+    static func generateTitle(apiKey: String, provider: AIProvider, model: String,
+                              userText: String, assistantText: String,
+                              conversation: Conversation, context: ModelContext) async {
+        // Hanya generate kalau judul masih default.
+        guard conversation.title == "Obrolan baru" || conversation.title == "New chat" else { return }
+        let prompt = """
+        Buatkan judul singkat (maksimal 5 kata, Bahasa Indonesia, tanpa tanda kutip) untuk percakapan ini:
+        User: \(userText.prefix(200))
+        AI: \(assistantText.prefix(200))
+        Judul:
+        """
+        let msg = AIClient.APIMessage(role: "user", content: .text(prompt))
+        do {
+            let title = try await AIClient.sendChat(apiKey: apiKey, provider: provider, model: model, messages: [msg])
+            let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "\"", with: "")
+                .replacingOccurrences(of: "**", with: "")
+            if !clean.isEmpty && clean.count <= 60 {
+                conversation.title = clean
+                try? context.save()
+            }
+        } catch { /* diam — judul tetap default */ }
+    }
 }

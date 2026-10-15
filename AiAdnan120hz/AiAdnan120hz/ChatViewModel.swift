@@ -241,6 +241,12 @@ final class ChatViewModel: ObservableObject {
                     await MemoryService.maybeSummarize(apiKey: taskApiKey, provider: taskProvider, model: currentModelId,
                                                       conversation: taskConversation, context: context)
                 }
+                // Generate judul otomatis dari topik (sekali, setelah respons pertama).
+                Task { @MainActor in
+                    await MemoryService.generateTitle(apiKey: taskApiKey, provider: taskProvider, model: currentModelId,
+                                                      userText: taskTrimmed, assistantText: full,
+                                                      conversation: taskConversation, context: context)
+                }
             } catch let e as APIError {
                 // Cancel paksa (user stop / double-tap) → diam, bukan error.
                 if case .network(let urlErr) = e, urlErr.code == .cancelled {

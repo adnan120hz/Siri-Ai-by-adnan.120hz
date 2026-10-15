@@ -43,7 +43,8 @@ struct ChatView: View {
             HStack {
                 SiriCircleButton(
                     systemImage: openedFromHistory ? "chevron.left" : "xmark",
-                    imageSize: 20
+                    imageSize: 16,
+                    buttonSize: 40
                 ) {
                     showConversations = true
                 }
