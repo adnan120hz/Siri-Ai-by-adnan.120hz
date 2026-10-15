@@ -119,24 +119,12 @@ struct SiriOrbFaint: View {
     @State private var pulse = false
 
     var body: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                Image("SiriOrb")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 200, height: 200)
-                    .clipShape(Circle())
-                    .glassEffect(.regular, in: Circle())
-                    .opacity(0.35)
-            } else {
-                Image("SiriOrb")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 200, height: 200)
-                    .clipShape(Circle())
-                    .opacity(0.15)
-            }
-        }
+        // Tampil tajam/HD: tanpa glassEffect & tanpa opacity rendah (itu yang bikin "burik").
+        Image("SiriOrb")
+            .resizable()
+            .scaledToFill()
+            .frame(width: 200, height: 200)
+            .clipShape(Circle())
         .scaleEffect(pulse ? 1.06 : 1.0)
         .animation(
             animate

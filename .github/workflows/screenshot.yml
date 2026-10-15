@@ -26,6 +26,7 @@ jobs:
 
       - name: Build for simulator
         run: |
+          set -o pipefail
           xcodebuild -project AiAdnan120hz/AiAdnan120hz.xcodeproj \
             -scheme AiAdnan120hz \
             -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
@@ -34,10 +35,15 @@ jobs:
 
       - name: Prepare simulator
         run: |
+          set -euo pipefail
           # Shutdown any booted devices first (avoid hang)
           xcrun simctl shutdown all || true
           sleep 3
-          SIM=$(xcrun simctl list devices available | grep "iPhone 17" | head -1 | grep -oE '[A-F0-9-]{36}' | head -1)
+          SIM=$(xcrun simctl list devices available | grep "iPhone 17" | head -1 | grep -oE '[A-F0-9-]{36}' | head -1 || true)
+          if [ -z "$SIM" ]; then
+            echo "::error::Simulator 'iPhone 17' tidak ditemukan di runner (transient). Rerun workflow."
+            exit 1
+          fi
           echo "SIM=$SIM" >> $GITHUB_ENV
           echo "Using simulator: $SIM"
           # Boot with timeout
@@ -52,6 +58,10 @@ jobs:
             sleep 5
           done
           APP_PATH=$(find ./DerivedData -name "AiAdnan120hz.app" | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::AiAdnan120hz.app tidak ditemukan — build simulator gagal (cek step 'Build for simulator')."
+            exit 1
+          fi
           echo "APP=$APP_PATH" >> $GITHUB_ENV
           echo "App: $APP_PATH"
           xcrun simctl install "$SIM" "$APP_PATH"
