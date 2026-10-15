@@ -29,6 +29,7 @@ struct ConversationsView: View {
     @State private var showSearch = false
     @State private var renameTarget: Conversation?
     @State private var renameText = ""
+    @State private var showVoiceModel = false
 
     private var filtered: [Conversation] {
         guard !searchText.isEmpty else { return conversations }
@@ -74,6 +75,9 @@ struct ConversationsView: View {
                             }
                         } label: {
                             Label("Select", systemImage: "checkmark.circle")
+                        }
+                        Button { showVoiceModel = true } label: {
+                            Label("Voice", systemImage: "waveform")
                         }
                         Divider()
                         Button { showSettings = true } label: {
@@ -201,6 +205,7 @@ struct ConversationsView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showVoiceModel) { VoiceModelView() }
         .overlay(deleteAlertOverlay)
         .alert("Rename", isPresented: Binding(
             get: { renameTarget != nil },

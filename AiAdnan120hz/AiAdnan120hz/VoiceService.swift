@@ -46,6 +46,16 @@ final class VoiceService: ObservableObject {
     @Published var transcript = ""
     @Published var permissionError: String?
 
+    /// Model suara terpilih (robot/cowok/cewek). Tersimpan di UserDefaults.
+    @Published var voiceModel: VoiceModel = VoiceModel(rawValue: UserDefaults.standard.string(forKey: "voiceModel") ?? "female") ?? .female {
+        didSet { UserDefaults.standard.set(voiceModel.rawValue, forKey: "voiceModel") }
+    }
+
+    /// Kecepatan bicara (0.5 = lambat, 1.5 = cepat). Diatur via slider.
+    @Published var speechRate: Float = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0 {
+        didSet { UserDefaults.standard.set(speechRate, forKey: "speechRate") }
+    }
+
     private var phase: Phase = .idle
     /// Token untuk membatalkan persiapan yang masih in-flight (mis. dialog izin kebuka lalu user tap stop).
     private var preparingToken = UUID()
@@ -274,7 +284,12 @@ final class VoiceService: ObservableObject {
         let utterance = AVSpeechUtterance(string: trimmed)
         utterance.voice = AVSpeechSynthesisVoice(language: "id-ID")
             ?? AVSpeechSynthesisVoice(language: "en-US")
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        // Baca dari UserDefaults langsung (bisa diubah dari VoiceModelView instance lain).
+        let modelRaw = UserDefaults.standard.string(forKey: "voiceModel") ?? "female"
+        let model = VoiceModel(rawValue: modelRaw) ?? .female
+        let rate = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0
+        utterance.pitchMultiplier = model.pitch
+        utterance.rate = rate * AVSpeechUtteranceDefaultSpeechRate
         synthesizer.speak(utterance)
     }
 
