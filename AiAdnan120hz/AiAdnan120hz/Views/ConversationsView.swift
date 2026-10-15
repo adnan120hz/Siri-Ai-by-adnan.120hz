@@ -181,7 +181,7 @@ struct ConversationsView: View {
                         Image(systemName: "square.and.pencil")
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 72, height: 72)
+                            .frame(width: SiriTheme.circleButton, height: SiriTheme.circleButton)
                             .background(Circle().fill(Color.black))
                     }
                     .buttonStyle(.plain)
