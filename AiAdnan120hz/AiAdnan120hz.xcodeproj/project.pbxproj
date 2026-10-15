@@ -21,6 +21,7 @@
 		67BEC9F706B740F19460C12C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA014E1E35A40F58E0C4247 /* SettingsView.swift */; };
 		295E2272DA304791BEFFB66C /* MediaPickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A16340B3314E76B5C48392 /* MediaPickers.swift */; };
 		59829766AE5C41618C41E762 /* AppRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705BE698198940F586A86820 /* AppRoot.swift */; };
+		A8E451B7717D6E238350F51F /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2E33546EEAAFA51A3CE4A56 /* OnboardingView.swift */; };
 		3EE38884CD4FE63CE3C04A92 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9E85F4D262DBA6521FC65F9 /* ContentView.swift */; };
 		5FD9A7DAC701D860C18C5EE3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B503598C3C0D3A574333D1D6 /* Assets.xcassets */; };
 		FA93D0E4EB74D29221EF0BA5 /* IconSwiss@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = F03759565B94F24A35F38012 /* IconSwiss@2x.png */; };
@@ -51,6 +52,7 @@
 		1EA014E1E35A40F58E0C4247 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
 		B3A16340B3314E76B5C48392 /* MediaPickers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MediaPickers.swift"; sourceTree = "<group>"; };
 		705BE698198940F586A86820 /* AppRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppRoot.swift"; sourceTree = "<group>"; };
+		F2E33546EEAAFA51A3CE4A56 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OnboardingView.swift"; sourceTree = "<group>"; };
 		B9E85F4D262DBA6521FC65F9 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ContentView.swift"; sourceTree = "<group>"; };
 		B503598C3C0D3A574333D1D6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets.xcassets"; sourceTree = "<group>"; };
 		F03759565B94F24A35F38012 /* IconSwiss@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "IconSwiss@2x.png"; sourceTree = "<group>"; };
@@ -117,6 +119,7 @@
 				1EA014E1E35A40F58E0C4247 /* SettingsView.swift */,
 				B3A16340B3314E76B5C48392 /* MediaPickers.swift */,
 				705BE698198940F586A86820 /* AppRoot.swift */,
+				F2E33546EEAAFA51A3CE4A56 /* OnboardingView.swift */,
 			);
 			path = "Views";
 			sourceTree = "<group>";
@@ -229,6 +232,7 @@
 				67BEC9F706B740F19460C12C /* SettingsView.swift in Sources */,
 				295E2272DA304791BEFFB66C /* MediaPickers.swift in Sources */,
 				59829766AE5C41618C41E762 /* AppRoot.swift in Sources */,
+				A8E451B7717D6E238350F51F /* OnboardingView.swift in Sources */,
 							EB89A93AA92217127A8DB7B6 /* TokenUsage.swift in Sources */,
 				51BEC7E343715065C00D5370 /* GitHubClient.swift in Sources */,
 				847BE9B5E7C14B378DD5E714 /* GitHubAgent.swift in Sources */,
