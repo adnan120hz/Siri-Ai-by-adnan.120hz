@@ -123,7 +123,7 @@ struct SiriOrbFaint: View {
         Image("SiriOrb")
             .resizable()
             .scaledToFill()
-            .frame(width: 200, height: 200)
+            .frame(width: 120, height: 120)
             .clipShape(Circle())
         .scaleEffect(pulse ? 1.06 : 1.0)
         .animation(

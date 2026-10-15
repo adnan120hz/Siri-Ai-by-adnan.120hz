@@ -256,7 +256,19 @@ struct AIClient {
         struct Choice: Decodable {
             struct Message: Decodable {
                 var content: String?
+                /// Model reasoning (mis. GLM di NVIDIA): content null, teks di sini.
+                var reasoning_content: String?
                 var tool_calls: [ToolCall]?
+                /// Teks jawaban final: content dulu, fallback ke reasoning_content.
+                var effectiveText: String? {
+                    if let c = content, !c.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return c
+                    }
+                    if let r = reasoning_content, !r.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return r
+                    }
+                    return nil
+                }
             }
             var message: Message
             var finish_reason: String?
@@ -266,7 +278,10 @@ struct AIClient {
 
     struct StreamChunk: Decodable {
         struct Choice: Decodable {
-            struct Delta: Decodable { var content: String? }
+            struct Delta: Decodable {
+                var content: String?
+                var reasoning_content: String?
+            }
             var delta: Delta
         }
         var choices: [Choice]
@@ -286,7 +301,7 @@ struct AIClient {
     /// Daftar fallback kalau /models kosong/gagal — hanya 3 model free pilihan user.
     static let freeModelFallback: [String] = [
         "free/glm-5.3-flash",
-        "free/glm-5.3",
+        "glm-5.3-flash",
         "free/deepseek-v4.1-flash",
     ]
 
@@ -332,7 +347,7 @@ struct AIClient {
         }
         do {
             let decoded = try JSONDecoder().decode(Response.self, from: data)
-            guard let text = decoded.choices.first?.message.content, !text.isEmpty else {
+            guard let text = decoded.choices.first?.message.effectiveText, !text.isEmpty else {
                 throw APIError.emptyReply
             }
             return text
@@ -371,7 +386,7 @@ struct AIClient {
         do {
             let decoded = try JSONDecoder().decode(Response.self, from: data)
             guard let choice = decoded.choices.first else { throw APIError.emptyReply }
-            return (choice.message.content, choice.message.tool_calls)
+            return (choice.message.effectiveText, choice.message.tool_calls)
         } catch let e as APIError {
             throw e
         } catch {
@@ -403,9 +418,14 @@ struct AIClient {
                         if payload == "[DONE]" { break }
                         guard let data = payload.data(using: .utf8) else { continue }
                         if let chunk = try? JSONDecoder().decode(StreamChunk.self, from: data),
-                           let token = chunk.choices.first?.delta.content, !token.isEmpty {
-                            gotAnything = true
-                            continuation.yield(token)
+                           let delta = chunk.choices.first?.delta {
+                            // Content dulu, fallback ke reasoning_content (model reasoning).
+                            let token = delta.content?.isEmpty == false ? delta.content
+                                : (delta.reasoning_content?.isEmpty == false ? delta.reasoning_content : nil)
+                            if let token, !token.isEmpty {
+                                gotAnything = true
+                                continuation.yield(token)
+                            }
                         }
                     }
                     if !gotAnything {
