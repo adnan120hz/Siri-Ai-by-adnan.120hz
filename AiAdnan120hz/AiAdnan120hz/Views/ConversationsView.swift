@@ -301,6 +301,7 @@ struct ConversationsView: View {
             ZStack {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onTapGesture {
                         withAnimation(SiriTheme.pop) { showDeleteAlert = false }
                     }
@@ -321,10 +322,11 @@ struct ConversationsView: View {
                             Text("Cancel")
                                 .font(.body)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(.primary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, SiriTheme.m)
                         }
+                        .buttonStyle(.plain)
+                        .tint(.primary)
                         Divider()
                         Button {
                             for c in pendingDelete { context.delete(c) }
@@ -340,13 +342,16 @@ struct ConversationsView: View {
                             Text("Delete")
                                 .font(.body)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(.red)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, SiriTheme.m)
                         }
+                        .buttonStyle(.plain)
+                        .tint(.red)
                     }
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(width: 270)
+                .fixedSize(horizontal: false, vertical: true)
                 .background(
                     ZStack {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -364,6 +369,7 @@ struct ConversationsView: View {
                 )
                 .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .zIndex(2)
         }
     }
