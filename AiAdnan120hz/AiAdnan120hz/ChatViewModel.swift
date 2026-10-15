@@ -24,7 +24,7 @@ final class ChatViewModel: ObservableObject {
     }
 
     /// Error jaringan transient yang layak dicoba ulang sekali.
-    private static func isTransientNetwork(_ e: URLError) -> Bool {
+    private static nonisolated func isTransientNetwork(_ e: URLError) -> Bool {
         switch e.code {
         case .timedOut, .networkConnectionLost, .notConnectedToInternet,
              .dataNotAllowed, .internationalRoamingOff:
