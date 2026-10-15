@@ -48,13 +48,8 @@ struct ConversationsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar: gear (kecil) kiri, hamburger kanan. Sesuai referensi.
+            // Top bar: hamburger kanan (berisi Grid / List / Select / Settings).
             HStack {
-                SiriCircleButton(systemImage: "gearshape", imageSize: 18, buttonSize: 44) {
-                    showSettings = true
-                }
-                .accessibilityLabel(Text("Settings"))
-
                 Spacer()
 
                 if mode == .select {
@@ -77,6 +72,10 @@ struct ConversationsView: View {
                             }
                         } label: {
                             Label("Select", systemImage: "checkmark.circle")
+                        }
+                        Divider()
+                        Button { showSettings = true } label: {
+                            Label("Settings", systemImage: "gearshape")
                         }
                     } label: {
                         Image(systemName: "line.3.horizontal")

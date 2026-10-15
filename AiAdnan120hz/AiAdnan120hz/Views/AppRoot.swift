@@ -24,38 +24,44 @@ struct AppRoot: View {
     }
 
     var body: some View {
-        Group {
-            if !hasSeenOnboarding {
-                OnboardingView {
-                    hasSeenOnboarding = true
+        ZStack {
+            Group {
+                if !hasSeenOnboarding {
+                    OnboardingView {
+                        hasSeenOnboarding = true
+                    }
+                } else if let convo = activeConversation {
+                    ChatView(
+                        conversation: convo,
+                        openedFromHistory: openedFromHistory,
+                        showConversations: $showConversations
+                    )
+                } else {
+                    Color(.systemBackground)
+                        .ignoresSafeArea()
+                        .onAppear { ensureConversation() }
                 }
-            } else if let convo = activeConversation {
-                ChatView(
-                    conversation: convo,
-                    openedFromHistory: openedFromHistory,
-                    showConversations: $showConversations
+            }
+            // Histori geser dari kiri (bukan dari bawah).
+            if hasSeenOnboarding && showConversations {
+                ConversationsView(
+                    onSelect: { convo in
+                        activeId = convo.id
+                        openedFromHistory = true
+                        showConversations = false
+                    },
+                    onNewChat: {
+                        let c = makeConversation()
+                        activeId = c.id
+                        openedFromHistory = false
+                        showConversations = false
+                    }
                 )
-            } else {
-                Color(.systemBackground)
-                    .ignoresSafeArea()
-                    .onAppear { ensureConversation() }
+                .transition(.move(edge: .leading))
+                .zIndex(1)
             }
         }
-        .fullScreenCover(isPresented: $showConversations) {
-            ConversationsView(
-                onSelect: { convo in
-                    activeId = convo.id
-                    openedFromHistory = true
-                    showConversations = false
-                },
-                onNewChat: {
-                    let c = makeConversation()
-                    activeId = c.id
-                    openedFromHistory = false
-                    showConversations = false
-                }
-            )
-        }
+        .animation(SiriTheme.liquid, value: showConversations)
         .onAppear { ensureConversation() }
         .onChange(of: conversations.count) { _, _ in ensureConversation() }
     }
