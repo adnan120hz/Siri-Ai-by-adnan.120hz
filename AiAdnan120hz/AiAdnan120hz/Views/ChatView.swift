@@ -19,6 +19,8 @@ struct ChatView: View {
 
     @State private var inputText = ""
     @State private var pendingImages: [Data] = []
+    /// Waktu kirim terakhir: cegah double-tap membunuh request sendiri.
+    @State private var lastSendStart = Date.distantPast
     @State private var showPlusMenu = false
     @State private var showCamera = false
     @State private var showPhotoPicker = false
@@ -202,7 +204,9 @@ struct ChatView: View {
             if let e { alertText = e }
         }
         .onDisappear {
-            viewModel.cancel()
+            // JANGAN cancel AI di sini: SwiftUI bisa transient disappear
+            // (animasi/transisi) dan itu membunuh request yang sah.
+            // Task jalan di background; hasilnya tetap tersimpan.
             voice.stopRecording()
             voice.stopSpeaking()
         }
@@ -338,8 +342,14 @@ struct ChatView: View {
     // MARK: - Actions.
 
     private func rightButtonAction() {
-        if viewModel.isSending { viewModel.cancel(); return }
+        if viewModel.isSending {
+            // Double-tap tak sengaja (<1s setelah kirim) jangan bunuh request.
+            if Date().timeIntervalSince(lastSendStart) < 1.0 { return }
+            viewModel.cancel()
+            return
+        }
         if canSend {
+            lastSendStart = Date()
             send()
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } else {
@@ -352,7 +362,8 @@ struct ChatView: View {
 
     @MainActor
     private func send() {
-        if viewModel.isSending { viewModel.cancel(); return }
+        // Jangan cancel dari sini; stop hanya via tombol stop eksplisit.
+        if viewModel.isSending { return }
         let text = inputText
         let images = pendingImages
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty else { return }

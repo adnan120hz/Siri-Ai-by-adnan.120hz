@@ -11,12 +11,27 @@ final class ChatViewModel: ObservableObject {
     @Published var lastError: String?
 
     private var streamTask: Task<Void, Never>?
+    /// True kalau cancel() dipanggil eksplisit (tombol stop). Bedakan dari
+    /// cancel misterius (double-tap / lifecycle) supaya tidak nuduh user.
+    private var cancelledByUser = false
 
     func cancel() {
+        cancelledByUser = true
         streamTask?.cancel()
         streamTask = nil
         isSending = false
         streamingText = ""
+    }
+
+    /// Error jaringan transient yang layak dicoba ulang sekali.
+    private static func isTransientNetwork(_ e: URLError) -> Bool {
+        switch e.code {
+        case .timedOut, .networkConnectionLost, .notConnectedToInternet,
+             .dataNotAllowed, .internationalRoamingOff:
+            return true
+        default:
+            return false
+        }
     }
 
     /// Kirim pesan user + gambar. `imageDatas` = JPEG siap kirim (foto/video frames).
@@ -73,6 +88,7 @@ final class ChatViewModel: ObservableObject {
         lastError = nil
         isSending = true
         streamingText = ""
+        cancelledByUser = false
 
         // 1. Simpan pesan user.
         let userMsg = ChatMessage(role: "user", text: trimmed, note: note)
@@ -116,23 +132,37 @@ final class ChatViewModel: ObservableObject {
 
         streamTask = Task { @MainActor in
             // Satu putaran kirim (dipanggil 2x kalau retry).
+            // Jaringan transient (timeout/putus) → coba ulang sekali sebelum fallback model.
             func runTurn(model: String) async throws -> String {
-                let ghConnected = !(GitHubStore.load() ?? "").isEmpty
-                if ghConnected {
-                    // Mode AGENT: AI bisa panggil tools GitHub beneran.
-                    // Kalau model tidak support function calling → fallback streaming biasa.
-                    do {
-                        return try await self.agentTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
-                                                        messages: taskApiMessages)
-                    } catch is AIClient.ToolsNotSupported {
+                func attempt() async throws -> String {
+                    let ghConnected = !(GitHubStore.load() ?? "").isEmpty
+                    if ghConnected {
+                        // Mode AGENT: AI bisa panggil tools GitHub beneran.
+                        // Kalau model tidak support function calling → fallback streaming biasa.
+                        do {
+                            return try await self.agentTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
+                                                            messages: taskApiMessages)
+                        } catch is AIClient.ToolsNotSupported {
+                            let (t, _) = try await self.streamingTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
+                                                                      messages: taskApiMessages)
+                            return t
+                        }
+                    } else {
                         let (t, _) = try await self.streamingTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
                                                                   messages: taskApiMessages)
                         return t
                     }
-                } else {
-                    let (t, _) = try await self.streamingTurn(apiKey: taskApiKey, provider: taskProvider, model: model,
-                                                              messages: taskApiMessages)
-                    return t
+                }
+                do {
+                    return try await attempt()
+                } catch let e as APIError {
+                    if case .network(let urlErr) = e, Self.isTransientNetwork(urlErr) {
+                        print("[SiriAi] jaringan transient (\(urlErr.code.rawValue)); retry sekali")
+                        try? await Task.sleep(nanoseconds: 1_000_000_000)
+                        try Task.checkCancellation() // user stop → jangan retry
+                        return try await attempt()
+                    }
+                    throw e
                 }
             }
 
@@ -142,6 +172,10 @@ final class ChatViewModel: ObservableObject {
                 do {
                     full = try await runTurn(model: currentModelId)
                 } catch let e as APIError {
+                    // Cancel → jangan buang waktu coba model lain.
+                    if case .network(let urlErr) = e, urlErr.code == .cancelled {
+                        throw e
+                    }
                     // KONEKSI DIPERKUAT: coba semua model yang tersedia secara berurutan.
                     // Kalau model utama gagal (404/400/timeout), coba model lain sebelum menyerah.
                     let candidates: [String] = {
@@ -173,6 +207,10 @@ final class ChatViewModel: ObservableObject {
                             succeeded = result
                             break
                         } catch let retryError as APIError {
+                            // Cancel → stop, jangan coba model lain.
+                            if case .network(let urlErr) = retryError, urlErr.code == .cancelled {
+                                throw retryError
+                            }
                             print("[SiriAi] Model \(candidate) juga gagal: \(retryError)")
                             lastError = retryError
                             continue
@@ -201,12 +239,30 @@ final class ChatViewModel: ObservableObject {
                                                       conversation: taskConversation, context: context)
                 }
             } catch let e as APIError {
-                print("[SiriAi] APIError: \(e.localizedDescription.prefix(200))")
-                taskAssistantMsg.text = ""
-                let desc = Self.visionHintIfNeeded(e.localizedDescription, hadImages: !taskImageDatas.isEmpty)
-                taskAssistantMsg.errorText = desc
-                self.lastError = desc
-                try? context.save()
+                // Cancel paksa (user stop / double-tap) → diam, bukan error.
+                if case .network(let urlErr) = e, urlErr.code == .cancelled {
+                    print("[SiriAi] request cancelled; silent=\(self.cancelledByUser)")
+                    if !self.cancelledByUser {
+                        taskAssistantMsg.errorText = "Terputus. Ketuk \"Try again\"."
+                        self.lastError = "Terputus. Ketuk \"Try again\"."
+                        try? context.save()
+                    }
+                } else {
+                    print("[SiriAi] APIError: \(e.localizedDescription.prefix(200))")
+                    taskAssistantMsg.text = ""
+                    let desc = Self.visionHintIfNeeded(e.localizedDescription, hadImages: !taskImageDatas.isEmpty)
+                    taskAssistantMsg.errorText = desc
+                    self.lastError = desc
+                    try? context.save()
+                }
+            } catch is CancellationError {
+                // Task di-cancel: user stop → diam. Selain itu → pesan ramah.
+                print("[SiriAi] CancellationError; silent=\(self.cancelledByUser)")
+                if !self.cancelledByUser {
+                    taskAssistantMsg.errorText = "Terputus. Ketuk \"Try again\"."
+                    self.lastError = "Terputus. Ketuk \"Try again\"."
+                    try? context.save()
+                }
             } catch {
                 print("[SiriAi] error: \(error.localizedDescription.prefix(200))")
                 var desc = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
