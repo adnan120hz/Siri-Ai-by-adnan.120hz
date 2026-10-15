@@ -11,6 +11,33 @@ import Speech
 // Anti-spam: state machine (idle → preparing → recording → transcribing → idle).
 // Tap berkali-kali saat preparing/recording/transcribing = diabaikan, tidak crash.
 
+// MARK: - Voice Model: 3 pilihan suara (Robot / Cowok / Cewek)
+
+enum VoiceModel: String, CaseIterable, Identifiable {
+    case robot
+    case male    // Cowok
+    case female  // Cewek
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .robot: return "Robot"
+        case .male: return "Cowok"
+        case .female: return "Cewek"
+        }
+    }
+
+    /// Pitch untuk tiap model (1.0 = normal).
+    var pitch: Float {
+        switch self {
+        case .robot: return 0.7   // Rendah, monoton = robotik
+        case .male: return 0.9    // Sedikit rendah = maskulin
+        case .female: return 1.1  // Sedikit tinggi = feminin
+        }
+    }
+}
+
 @MainActor
 final class VoiceService: ObservableObject {
     private enum Phase { case idle, preparing, recording, transcribing }

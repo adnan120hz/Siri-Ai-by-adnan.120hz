@@ -27,6 +27,8 @@ struct ConversationsView: View {
     @State private var pendingDelete: [Conversation] = []
     @State private var searchText = ""
     @State private var showSearch = false
+    @State private var renameTarget: Conversation?
+    @State private var renameText = ""
 
     private var filtered: [Conversation] {
         guard !searchText.isEmpty else { return conversations }
@@ -137,6 +139,8 @@ struct ConversationsView: View {
             Group {
                 if filtered.isEmpty {
                     emptyState
+                } else if mode == .select {
+                    selectListContent
                 } else if mode == .list {
                     listContent
                 } else {
@@ -198,6 +202,23 @@ struct ConversationsView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .overlay(deleteAlertOverlay)
+        .alert("Rename", isPresented: Binding(
+            get: { renameTarget != nil },
+            set: { if !$0 { renameTarget = nil } }
+        )) {
+            TextField("Nama baru", text: $renameText)
+            Button("Batal", role: .cancel) { renameTarget = nil }
+            Button("Simpan") {
+                if let target = renameTarget {
+                    let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        target.title = trimmed
+                        try? context.save()
+                    }
+                }
+                renameTarget = nil
+            }
+        }
         .animation(SiriTheme.liquid, value: showSearch)
         .animation(SiriTheme.liquid, value: mode)
     }
@@ -236,6 +257,10 @@ struct ConversationsView: View {
                                 onDelete: {
                                     pendingDelete = [convo]
                                     showDeleteAlert = true
+                                },
+                                onRename: {
+                                    renameTarget = convo
+                                    renameText = convo.title
                                 }
                             )
                         }
@@ -256,6 +281,10 @@ struct ConversationsView: View {
                                 onDelete: {
                                     pendingDelete = [convo]
                                     showDeleteAlert = true
+                                },
+                                onRename: {
+                                    renameTarget = convo
+                                    renameText = convo.title
                                 }
                             )
                         }
@@ -292,6 +321,32 @@ struct ConversationsView: View {
                             .onTapGesture { onSelect(convo) }
                     }
                     .onDelete { deleteConversations(previousItems, at: $0) }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    // MARK: - Select mode list (checkmark + title + preview + thumbnail).
+
+    private var selectListContent: some View {
+        List {
+            if !todayItems.isEmpty {
+                Section("Today") {
+                    ForEach(todayItems) { convo in
+                        SelectListRow(conversation: convo,
+                                      isSelected: selection.contains(convo.id),
+                                      onToggle: { toggleSelect(convo) })
+                    }
+                }
+            }
+            if !previousItems.isEmpty {
+                Section("Previous 30 Days") {
+                    ForEach(previousItems) { convo in
+                        SelectListRow(conversation: convo,
+                                      isSelected: selection.contains(convo.id),
+                                      onToggle: { toggleSelect(convo) })
+                    }
                 }
             }
         }
@@ -414,6 +469,7 @@ struct MasonryCard: View {
     var isSelected: Bool = false
     var onTap: () -> Void
     var onDelete: () -> Void
+    var onRename: () -> Void = {}
 
     @State private var appeared = false
     // Cache: decode UIImage sekali di onAppear, bukan tiap body evaluate (berat di main thread).
@@ -504,6 +560,7 @@ struct MasonryCard: View {
         .scaleEffect(appeared ? 1 : 0.92)
         .onTapGesture(perform: onTap)
         .contextMenu {
+            Button("Rename") { onRename() }
             Button("Delete", role: .destructive, action: onDelete)
         }
         .onAppear { loadPhoto() }
@@ -576,5 +633,60 @@ struct ConversationListRow: View {
         .padding(.vertical, SiriTheme.xs)
         .onAppear { loadThumb() }
         .onChange(of: conversation.messages.count) { _, _ in loadThumb() }
+    }
+}
+
+// MARK: - Select mode row: checkmark + title + preview + thumbnail.
+
+struct SelectListRow: View {
+    let conversation: Conversation
+    let isSelected: Bool
+    let onToggle: () -> Void
+
+    @State private var cachedThumb: UIImage?
+
+    private func loadThumb() {
+        for msg in conversation.messages {
+            if let img = msg.images.first, let ui = UIImage(data: img.data) {
+                cachedThumb = ui
+                return
+            }
+        }
+        cachedThumb = nil
+    }
+
+    private var snippet: String {
+        conversation.messages.sorted { $0.createdAt < $1.createdAt }
+            .last(where: { !$0.text.isEmpty })?.text ?? ""
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Blue checkmark circle.
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 24))
+                .foregroundStyle(isSelected ? Color.blue : Color(.systemGray3))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(conversation.title.isEmpty ? "New chat" : conversation.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(snippet)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer()
+            if let ui = cachedThumb {
+                Image(uiImage: ui)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onToggle)
+        .onAppear { loadThumb() }
     }
 }
