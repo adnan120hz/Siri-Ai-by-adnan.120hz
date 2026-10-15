@@ -1,81 +1,40 @@
 import Foundation
 import Security
 
-// MARK: - Penyedia AI: APInex dan NVIDIA NIM. Key disimpan terpisah per provider.
+// MARK: - Penyedia AI: APInex saja. Key disimpan di Keychain.
 
 enum AIProvider: String, CaseIterable, Identifiable {
     case apinex
-    case nvidia
 
     var id: String { rawValue }
 
-    var title: String {
-        switch self {
-        case .apinex: return "APInex"
-        case .nvidia: return "NVIDIA NIM"
-        }
-    }
+    var title: String { "APInex" }
 
-    var baseURL: URL {
-        switch self {
-        case .apinex: return URL(string: "https://api.apinex.bond/v1")!
-        case .nvidia: return URL(string: "https://integrate.api.nvidia.com/v1")!
-        }
-    }
+    var baseURL: URL { URL(string: "https://api.apinex.bond/v1")! }
 
-    /// Model bawaan tiap provider.
-    var defaultModel: String {
-        switch self {
-        case .apinex: return "free/glm-5.3-flash"
-        case .nvidia: return "z-ai/glm-5.3-flash"
-        }
-    }
+    /// Model bawaan.
+    var defaultModel: String { "free/glm-5.3-flash" }
 
     /// Model fallback kalau /models gagal/kosong.
-    var modelFallback: [String] {
-        switch self {
-        case .apinex: return AIClient.freeModelFallback
-        case .nvidia: return ["z-ai/glm-5.3-flash"]
-        }
-    }
+    var modelFallback: [String] { AIClient.freeModelFallback }
 
-    /// Aturan model yang boleh dipakai. APInex: hanya 3 model pilihan user.
-    /// NVIDIA NIM: semua model yang dikembalikan /models boleh dipakai.
+    /// Aturan model yang boleh dipakai: hanya model pilihan user.
     func allowsModel(_ id: String) -> Bool {
         let t = id.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return false }
-        switch self {
-        case .apinex:
-            return AIClient.freeModelFallback.contains(t)
-        case .nvidia: return true
-        }
+        return AIClient.freeModelFallback.contains(t)
     }
 
     var keyHelp: String {
-        switch self {
-        case .apinex:
-            return "Tempel API key kamu dari apinex.bond."
-        case .nvidia:
-            return "Tempel API key kamu dari build.nvidia.com (NVIDIA NIM). Gratis, 10rb request/hari."
-        }
+        "Tempel API key kamu dari apinex.bond."
     }
 
     var keyDestinationNote: String {
-        switch self {
-        case .apinex:
-            return "Key hanya disimpan di Keychain HP ini — tidak dikirim ke mana pun selain api.apinex.bond saat chat."
-        case .nvidia:
-            return "Key hanya disimpan di Keychain HP ini — tidak dikirim ke mana pun selain integrate.api.nvidia.com saat chat."
-        }
+        "Key hanya disimpan di Keychain HP ini — tidak dikirim ke mana pun selain api.apinex.bond saat chat."
     }
 
     /// Link untuk mendapatkan API key (ditampilkan dalam Bahasa Inggris sesuai permintaan user).
-    var keyGetURL: URL {
-        switch self {
-        case .apinex: return URL(string: "https://apinex.bond")!
-        case .nvidia: return URL(string: "https://build.nvidia.com/settings/api-keys")!
-        }
-    }
+    var keyGetURL: URL { URL(string: "https://apinex.bond")! }
 
     var keyGetLinkText: String {
         return "Get your API key here"

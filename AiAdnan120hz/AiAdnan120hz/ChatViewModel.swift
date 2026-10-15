@@ -63,8 +63,9 @@ final class ChatViewModel: ObservableObject {
             conversation.modelId = "free/glm-5.3-flash"
             try? context.save()
         }
-        if conversation.modelId == "z-ai/glm-5-3-flash" {
-            conversation.modelId = "z-ai/glm-5.3-flash"
+        // Migrasi: model NVIDIA lama → default Apinex.
+        if conversation.modelId.hasPrefix("z-ai/") {
+            conversation.modelId = "free/glm-5.3-flash"
             try? context.save()
         }
         var modelId = conversation.modelId.isEmpty ? appState.resolvedModelId(for: provider) : conversation.modelId
@@ -180,7 +181,7 @@ final class ChatViewModel: ObservableObject {
                     // Kalau model utama gagal (404/400/timeout), coba model lain sebelum menyerah.
                     let candidates: [String] = {
                         var list = [currentModelId]
-                        // Tambah model fallback provider (3 apinex + default nvidia).
+                        // Tambah model fallback provider.
                         for m in taskProvider.modelFallback where !list.contains(m) {
                             list.append(m)
                         }

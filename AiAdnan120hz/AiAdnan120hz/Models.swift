@@ -127,7 +127,7 @@ final class AppState: ObservableObject {
     @Published var availableModels: [String] = []
     @Published var modelsError: String?
 
-    /// Provider aktif: "apinex" | "nvidia". Key disimpan terpisah per provider.
+    /// Provider aktif: "apinex". Key disimpan di Keychain.
     @Published var activeProvider: AIProvider = AIProvider(rawValue: UserDefaults.standard.string(forKey: "aiProvider") ?? "apinex") ?? .apinex {
         didSet { UserDefaults.standard.set(activeProvider.rawValue, forKey: "aiProvider") }
     }

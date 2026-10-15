@@ -35,15 +35,10 @@ struct SettingsView: View {
                 }
 
                 Section(header: Text("AI Provider")) {
-                    Picker("Provider", selection: $appState.activeProvider) {
-                        ForEach(AIProvider.allCases) { p in
-                            Text(p.title).tag(p)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: appState.activeProvider) { _, _ in
-                        keyInput = ""
-                        keyMessage = nil
+                    HStack {
+                        Text("APInex")
+                            .font(.headline)
+                        Spacer()
                     }
 
                     HStack(spacing: SiriTheme.s) {

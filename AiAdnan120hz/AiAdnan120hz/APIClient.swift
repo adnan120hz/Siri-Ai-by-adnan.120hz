@@ -1,7 +1,7 @@
 import Foundation
 
 // MARK: - AIClient (OpenAI-compatible) — semua lewat URLSession, tanpa fake.
-// Mendukung dua provider: APInex dan NVIDIA NIM. Provider dipilih user di Settings.
+// Mendukung provider APInex. Provider dipilih user di Settings.
 
 enum APIError: LocalizedError {
     case noKey
@@ -256,7 +256,7 @@ struct AIClient {
         struct Choice: Decodable {
             struct Message: Decodable {
                 var content: String?
-                /// Model reasoning (mis. GLM di NVIDIA): content null, teks di sini.
+                /// Model reasoning: content null, teks di reasoning_content.
                 var reasoning_content: String?
                 var tool_calls: [ToolCall]?
                 /// Teks jawaban final: content dulu, fallback ke reasoning_content.
