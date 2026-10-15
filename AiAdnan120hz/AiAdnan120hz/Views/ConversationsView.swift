@@ -192,6 +192,10 @@ struct ConversationsView: View {
             .background(Color.clear)
         }
         .background(Color(.systemBackground))
+        .onAppear {
+            // Keyboard auto-tutup saat masuk menu histori.
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .overlay(deleteAlertOverlay)
         .animation(SiriTheme.liquid, value: showSearch)

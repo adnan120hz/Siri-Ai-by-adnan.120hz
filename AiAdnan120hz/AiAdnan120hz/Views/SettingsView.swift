@@ -152,10 +152,10 @@ struct SettingsView: View {
                 }
 
                 Section(header: Text("About")) {
-                    Text("Siri Ai — AI chat with your own API key (APInex / NVIDIA NIM). No account, no login.")
+                    Text("Siri Ai — AI chat with your own API key (APInex). No account, no login.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                    Text("Credit: adnan.120hz")
+                    Link("Credit: @adnan.120hz (TikTok)", destination: URL(string: "https://www.tiktok.com/@adnan.120hz")!)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
