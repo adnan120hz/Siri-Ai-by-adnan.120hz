@@ -120,11 +120,13 @@ struct SiriOrbFaint: View {
 
     var body: some View {
         // Tampil tajam/HD: tanpa glassEffect & tanpa opacity rendah (itu yang bikin "burik").
+        // Sedikit pudar biar mirip Siri asli.
         Image("SiriOrb")
             .resizable()
             .scaledToFill()
             .frame(width: 120, height: 120)
             .clipShape(Circle())
+            .opacity(0.55)
         .scaleEffect(pulse ? 1.06 : 1.0)
         .animation(
             animate
