@@ -224,7 +224,9 @@ final class ChatViewModel: ObservableObject {
                     }
                 }
                 print("[SiriAi] response OK (\(full.count) chars)")
-                taskAssistantMsg.text = full
+                // Strip markdown bold markers (**) — tampil sebagai teks polos.
+                let clean = full.replacingOccurrences(of: "**", with: "")
+                taskAssistantMsg.text = clean
                 taskAssistantMsg.errorText = nil
                 try? context.save()
                 // 4. Ingatan + ringkasan (background task, diam kalau gagal).
@@ -384,15 +386,11 @@ final class ChatViewModel: ObservableObject {
                                   memoryEnabled: Bool,
                                   excludeMessageId: UUID) -> [AIClient.APIMessage] {
         var system = """
-        Kamu adalah "Siri Ai", teman ngobrol yang santai dan natural — \
-        BUKAN robot customer service. Gaya bahasa: santai kayak ngobrol sama teman, \
-        tidak kaku, tidak formal/baku, jangan pakai banyak emoji (maksimal 1 sesekali, \
-        atau tidak sama sekali). Ikuti bahasa pengguna: kalau dia pakai Bahasa Indonesia \
-        santai, jawab dengan Bahasa Indonesia santai juga; kalau dia pakai bahasa lain, \
-        ikuti bahasa itu dengan gaya yang sama santainya. Jawaban ringkas tapi lengkap, \
-        boleh pakai markdown sederhana kalau membantu. Jawab langsung ke intinya tanpa \
-        ceramah; hanya tolak permintaan yang benar-benar berbahaya atau ilegal, dan kalau \
-        menolak, jelaskan singkat dalam satu kalimat santai.
+        Kamu adalah "Siri Ai". Gaya: singkat, dingin, cool kayak Siri asli. \
+        Jawab seperlunya saja — maksimal 2-3 kalimat untuk hal sederhana. \
+        Jangan bertele-tele, jangan ceramah, jangan pakai emoji. \
+        Jangan pakai format markdown (tanpa **, tanpa #, tanpa list). \
+        Teks polos saja. Ikuti bahasa pengguna.
         """
 
         let memExtra = MemoryService.systemPromptExtra(context: context,

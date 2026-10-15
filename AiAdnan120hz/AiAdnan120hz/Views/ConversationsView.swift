@@ -149,9 +149,14 @@ struct ConversationsView: View {
 
             // Bottom: search left, trash (select) / compose right.
             HStack {
-                SiriCircleButton(systemImage: "magnifyingglass", imageSize: 24) {
+                Button {
                     withAnimation(SiriTheme.liquid) { showSearch.toggle() }
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.primary)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel(Text("Search"))
                 Spacer()
                 if mode == .select {
@@ -179,9 +184,7 @@ struct ConversationsView: View {
                     } label: {
                         Image(systemName: "square.and.pencil")
                             .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: SiriTheme.circleButton, height: SiriTheme.circleButton)
-                            .background(Circle().fill(Color.black))
+                            .foregroundStyle(.primary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text("New chat"))
