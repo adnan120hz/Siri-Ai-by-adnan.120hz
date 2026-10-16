@@ -51,9 +51,18 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Kirim pesan
 
+    /// "Other API Key": true HANYA kalau premium DAN toggle ON.
+    /// Segala kondisi lain (bukan premium, atau toggle mati) → selalu key 1 (free).
+    private static var useEffectivePremiumKey: Bool {
+        PremiumState.shared.isPremium && PremiumFeatures.shared.usePremiumKey
+    }
+
     /// Kirim pesan user + gambar. `imageDatas` = JPEG siap kirim (foto/video frames).
+    /// `fileImages` = gambar dari dokumen premium (pdf/jpg/png via FileImportService),
+    /// sudah membawa mimeType aslinya — dikirim via `sendWithImages`.
     func send(conversation: Conversation, text: String,
               imageDatas: [(data: Data, isVideoFrame: Bool)],
+              fileImages: [(data: Data, mimeType: String)] = [],
               note: String?, context: ModelContext, appState: AppState) {
         // Recover stuck state: isSending true tapi tidak ada task berjalan
         // (mis. task mati sebelum reset). Tanpa ini, semua kirim gagal diam-diam.
@@ -74,7 +83,7 @@ final class ChatViewModel: ObservableObject {
             return
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || !imageDatas.isEmpty else { return }
+        guard !trimmed.isEmpty || !imageDatas.isEmpty || !fileImages.isEmpty else { return }
 
         limitNotice = nil
         // FREE LIMITS (premium melewati). Urutan: per-chat dulu, baru per-hari.
@@ -96,6 +105,7 @@ final class ChatViewModel: ObservableObject {
         // ini best-effort karena SwiftData save-nya implisit (lihat catatan di
         // bawah), bukan enforcement total.
         let incomingBytes = Int64(imageDatas.reduce(0) { $0 + $1.data.count })
+            + Int64(fileImages.reduce(0) { $0 + $1.data.count })
             + Int64(trimmed.utf8.count)
         guard StorageQuota.canAccommodate(incomingBytes) else {
             print("[SiriAi] send(): blocked — storage quota tercapai")
@@ -113,12 +123,15 @@ final class ChatViewModel: ObservableObject {
         for img in imageDatas {
             userMsg.images.append(ImageAttachment(data: img.data, isVideoFrame: img.isVideoFrame))
         }
+        for f in fileImages {
+            userMsg.images.append(ImageAttachment(data: f.data, isVideoFrame: false))
+        }
         conversation.messages.append(userMsg)
         conversation.updatedAt = Date()
         if conversation.title == "Obrolan baru" {
             if !trimmed.isEmpty {
                 conversation.title = String(trimmed.prefix(40))
-            } else if !imageDatas.isEmpty {
+            } else if !imageDatas.isEmpty || !fileImages.isEmpty {
                 conversation.title = "New Photo"
             }
         }
@@ -139,7 +152,7 @@ final class ChatViewModel: ObservableObject {
         conversation.messages.append(assistantMsg)
         try? context.save()
 
-        print("[SiriAi] send(): model=\(GeminiClient.primaryModel) text=\(trimmed.prefix(60)) images=\(imageDatas.count)")
+        print("[SiriAi] send(): model=\(GeminiClient.primaryModel) text=\(trimmed.prefix(60)) images=\(imageDatas.count) fileImages=\(fileImages.count) premiumKey=\(Self.useEffectivePremiumKey)")
 
         // Capture immutable copies for the Task (Swift 6 concurrency).
         let taskAssistantMsg = assistantMsg
@@ -147,19 +160,24 @@ final class ChatViewModel: ObservableObject {
         let taskHistory = history
         let taskTrimmed = trimmed
         let taskImageDatas = imageDatas
+        let taskFileImages = fileImages
         let taskConversation = conversation
         let taskMemoryEnabled = appState.memoryEnabled
+        let taskUsePremiumKey = Self.useEffectivePremiumKey
 
         sendTask = Task { @MainActor in
             do {
                 let full: String
-                if taskImageDatas.isEmpty {
+                let allImages = taskImageDatas.map { (data: $0.data, mimeType: "image/jpeg") }
+                    + taskFileImages
+                if allImages.isEmpty {
                     full = try await GeminiClient.sendText(
-                        taskTrimmed, history: taskHistory, systemInstruction: taskSystem)
+                        taskTrimmed, history: taskHistory, systemInstruction: taskSystem,
+                        usePremiumKey: taskUsePremiumKey)
                 } else {
-                    let imgs = taskImageDatas.map { (data: $0.data, mimeType: "image/jpeg") }
                     full = try await GeminiClient.sendWithImages(
-                        taskTrimmed, images: imgs, history: taskHistory, systemInstruction: taskSystem)
+                        taskTrimmed, images: allImages, history: taskHistory,
+                        systemInstruction: taskSystem, usePremiumKey: taskUsePremiumKey)
                 }
                 print("[SiriAi] response OK (\(full.count) chars)")
                 // Estimasi token kasar untuk pelacak kuota lokal.
@@ -268,6 +286,17 @@ final class ChatViewModel: ObservableObject {
             (list/read/write file GitHub). Kalau user bertanya soal repo/kode, jawab dari \
             konteks yang ada, atau arahkan user ke menu Konektivitas → GitHub di app.
             """
+        }
+
+        // PROMPT MODE (premium saja): lapisi gaya bicara pilihan user TANPA
+        // mengganti instruksi dasar Siri di atas — digabung dengan "\n\n",
+        // bukan di-replace. Free tier selalu memakai instruksi dasar saja.
+        if PremiumState.shared.isPremium {
+            let modeExtra = PromptMode.selected.systemInstruction()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !modeExtra.isEmpty {
+                system += "\n\n\(modeExtra)"
+            }
         }
 
         // Riwayat: 20 pesan terakhir (teks saja), tanpa pesan yang sedang dikirim.

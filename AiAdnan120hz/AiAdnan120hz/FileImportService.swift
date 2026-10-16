@@ -555,7 +555,10 @@ private enum ZipReader {
             }
             guard let flags = u16(data, pos + 8),
                   let method = u16(data, pos + 10),
-                  let crc = u32(data, pos + 14),
+                  // Offset 16: CRC-32 di central directory header (PK0102).
+                  // AWAS: jangan disamakan dengan local file header (PK0304)
+                  // yang CRC-nya di offset 14 — layout keduanya berbeda.
+                  let crc = u32(data, pos + 16),
                   let compSize32 = u32(data, pos + 20),
                   let uncompSize32 = u32(data, pos + 24),
                   let nameLen = u16(data, pos + 28),
@@ -674,6 +677,24 @@ private enum ZipReader {
 /// Decoder DEFLATE mentah (raw, tanpa wrapper zlib) sesuai RFC 1951.
 /// Dipakai untuk entri ZIP metode 8. Ditulis manual karena project
 /// tidak memakai library ZIP eksternal.
+///
+/// KEPUTUSAN DESAIN (2026-10-17): sengaja TIDAK memakai framework Compression
+/// (COMPRESSION_ZLIB). Framework itu hanya mendukung format zlib utuh — header
+/// 2 byte + DEFLATE + trailer Adler-32 4 byte (RFC 1950) — dan tidak punya mode
+/// raw-deflate. Trik "tempel header palsu 0x78 0x9C" ke data mentah ZIP tidak
+/// terverifikasi: tidak ada dokumentasi/bukti kredibel bahwa decoder Apple
+/// mentolerir trailer Adler-32 yang hilang/tidak cocok, dan tidak bisa diuji
+/// eksekusi di lingkungan ini. Decoder manual ini + verifikasi CRC32 bawaan
+/// ZIP adalah jalur yang perilakunya sepenuhnya bisa diprediksi dari RFC.
+///
+/// CATATAN JUJUR: kode ini BELUM PERNAH dikompilasi/dieksekusi (tidak ada Mac
+/// di sini). Sudah di-review statis baris-per-baris melawan RFC 1951 — tabel
+/// length/distance §3.2.5, kode Huffman kanonik §3.2.2, urutan bit LSB-first
+/// dengan kode Huffman MSB-first §3.2, urutan code-length §3.2.7, blok stored/
+/// fixed/dynamic + flag final-block §3.2.3–3.2.6, guard anti zip-bomb 64 MB —
+/// dan satu bug offset CRC central-directory sudah diperbaiki dari review
+/// tersebut. Tapi review statis BUKAN pengganti uji jalan: WAJIB smoke test
+/// di device/CI dengan file zip/ipa/apk nyata sebelum jalur ini diandalkan.
 private enum RawInflate {
     private enum InflateError: Error { case truncated, invalid }
 
@@ -821,7 +842,11 @@ private enum RawInflate {
                 let dsym = try dist.decode(&r)
                 guard dsym < 30 else { throw InflateError.invalid }
                 let distance = distBase[dsym] + (try r.readBits(distExtra[dsym]))
-                guard distance >= 1, distance <= output.count else { throw InflateError.invalid }
+                // Jendela DEFLATE maks 32.768 (RFC 1951 §3.2.5: jarak 1–32768).
+                // Encoder valid tidak pernah melebihi itu, jadi batas ini tidak
+                // menolak stream valid — hanya menolak data korup lebih awal
+                // (lapis kedua setelah verifikasi CRC32 di ZipReader.extract).
+                guard distance >= 1, distance <= 32768, distance <= output.count else { throw InflateError.invalid }
                 guard UInt64(output.count) + UInt64(length) <= cap else { throw InflateError.invalid }
                 for _ in 0..<length {
                     output.append(output[output.count - distance])

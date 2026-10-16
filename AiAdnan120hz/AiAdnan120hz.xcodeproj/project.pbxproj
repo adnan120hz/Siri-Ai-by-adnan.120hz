@@ -39,6 +39,7 @@
 		E0C47738D04E9BCB2C0B8B30 /* RedeemCodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5179FBC3BA6E0DF9D32B5675 /* RedeemCodeView.swift */; };
 		DDD32626102017AA830A43B7 /* PremiumState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4F785F589105FF2EBF3E327 /* PremiumState.swift */; };
 		88E76430ED3771E55248A6D6 /* PromptModes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30C34666248E7C5F33F65609 /* PromptModes.swift */; };
+		97CB727A5980167E7B6A6382 /* PremiumFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43FF3EF2653BAF8FDF6B5AF0 /* PremiumFeatures.swift */; };
 		1AB4914CE601C3148DF00E36 /* RedeemValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7938CB34A02F62F1F89E20F1 /* RedeemValidator.swift */; };
 		CADD00A609A64FB087F38C16 /* FreeLimits.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF8B8213F68F4C14AFFF6674 /* FreeLimits.swift */; };
 		A5F1F4AC7C7985B672D0AA5B /* FileImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16138EA6120617D607114BC3 /* FileImportService.swift */; };
@@ -80,6 +81,7 @@
 		5179FBC3BA6E0DF9D32B5675 /* RedeemCodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RedeemCodeView.swift"; sourceTree = "<group>"; };
 		A4F785F589105FF2EBF3E327 /* PremiumState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PremiumState.swift"; sourceTree = "<group>"; };
 		30C34666248E7C5F33F65609 /* PromptModes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PromptModes.swift"; sourceTree = "<group>"; };
+		43FF3EF2653BAF8FDF6B5AF0 /* PremiumFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PremiumFeatures.swift"; sourceTree = "<group>"; };
 		7938CB34A02F62F1F89E20F1 /* RedeemValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RedeemValidator.swift"; sourceTree = "<group>"; };
 		FF8B8213F68F4C14AFFF6674 /* FreeLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FreeLimits.swift"; sourceTree = "<group>"; };
 		16138EA6120617D607114BC3 /* FileImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FileImportService.swift"; sourceTree = "<group>"; };
@@ -127,6 +129,7 @@
 				7938CB34A02F62F1F89E20F1 /* RedeemValidator.swift */,
 				A4F785F589105FF2EBF3E327 /* PremiumState.swift */,
 				30C34666248E7C5F33F65609 /* PromptModes.swift */,
+				43FF3EF2653BAF8FDF6B5AF0 /* PremiumFeatures.swift */,
 				FF8B8213F68F4C14AFFF6674 /* FreeLimits.swift */,
 				16138EA6120617D607114BC3 /* FileImportService.swift */,
 );
@@ -269,6 +272,7 @@
 				1AB4914CE601C3148DF00E36 /* RedeemValidator.swift in Sources */,
 				DDD32626102017AA830A43B7 /* PremiumState.swift in Sources */,
 				88E76430ED3771E55248A6D6 /* PromptModes.swift in Sources */,
+				97CB727A5980167E7B6A6382 /* PremiumFeatures.swift in Sources */,
 				E0C47738D04E9BCB2C0B8B30 /* RedeemCodeView.swift in Sources */,
 				CADD00A609A64FB087F38C16 /* FreeLimits.swift in Sources */,
 				A5F1F4AC7C7985B672D0AA5B /* FileImportService.swift in Sources */,

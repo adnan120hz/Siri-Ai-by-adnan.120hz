@@ -12,6 +12,9 @@ struct ChatView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var viewModel = ChatViewModel()
     @StateObject private var voice = VoiceService()
+    // Gating fitur premium di composer: UI refresh saat redeem/toggle berubah.
+    @ObservedObject private var premiumState = PremiumState.shared
+    @ObservedObject private var premiumFeatures = PremiumFeatures.shared
 
     let conversation: Conversation
     var openedFromHistory: Bool = false
@@ -25,6 +28,10 @@ struct ChatView: View {
     @State private var showCamera = false
     @State private var showPhotoPicker = false
     @State private var showFilePicker = false
+    /// Picker dokumen (premium, file reading): pdf/jpg/png/zip/ipa/apk/raw.
+    @State private var showDocumentPicker = false
+    /// Gambar dari dokumen premium, menunggu dikirim bersama pesan berikutnya.
+    @State private var pendingFileImages: [(data: Data, mimeType: String)] = []
     @State private var alertText: String?
     @State private var wasSending = false
     /// True kalau pesan terakhir dikirim via voice input (mic) — AI wajib bersuara balik.
@@ -38,7 +45,8 @@ struct ChatView: View {
     }
 
     private var canSend: Bool {
-        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingImages.isEmpty
+        !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !pendingImages.isEmpty || !pendingFileImages.isEmpty
     }
 
     var body: some View {
@@ -142,6 +150,44 @@ struct ChatView: View {
                 }
             }
 
+            // Pending document images (premium file reading): thumbnail + hapus.
+            if !pendingFileImages.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: SiriTheme.s) {
+                        ForEach(Array(pendingFileImages.enumerated()), id: \.offset) { idx, item in
+                            ZStack(alignment: .topTrailing) {
+                                if let ui = UIImage(data: item.data) {
+                                    Image(uiImage: ui)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 64, height: 64)
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                } else {
+                                    Image(systemName: "doc.text.fill")
+                                        .font(.system(size: 28))
+                                        .frame(width: 64, height: 64)
+                                        .background(Color(.secondarySystemBackground))
+                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                }
+                                Button {
+                                    pendingFileImages.remove(at: idx)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundStyle(.primary, Color(.systemBackground))
+                                }
+                                .offset(x: 6, y: -6)
+                                .accessibilityLabel(Text("Remove document attachment"))
+                            }
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
+                    }
+                    .padding(.horizontal, SiriTheme.m)
+                    .padding(.vertical, SiriTheme.s)
+                    .animation(SiriTheme.pop, value: pendingFileImages.count)
+                }
+            }
+
             // Free-limit banner: muncul saat pengiriman diblokir (20/chat atau 40/hari).
             if let notice = viewModel.limitNotice {
                 limitBanner(for: notice)
@@ -184,6 +230,15 @@ struct ChatView: View {
             MediaFilePicker { datas in
                 for d in datas { addPickedImage(d) }
             }
+        }
+        .sheet(isPresented: $showDocumentPicker) {
+            DocumentPickerView(
+                onPick: { handleDocumentPick($0) },
+                onCancel: {},
+                onUnsupportedType: { ext in
+                    alertText = "Tipe file '\(ext)' belum didukung. Yang didukung: pdf, jpg, png, zip, ipa, apk, raw."
+                }
+            )
         }
         .alert("Info", isPresented: Binding(
             get: { alertText != nil },
@@ -297,6 +352,13 @@ struct ChatView: View {
                     plusRow(icon: "doc.fill", title: "Files") {
                         dismissMenu(); showFilePicker = true
                     }
+                    // Dokumen (baca file): HANYA premium + toggle file reading ON.
+                    // Free tier tidak melihat opsi ini sama sekali.
+                    if premiumState.isPremium && premiumFeatures.fileReadingEnabled {
+                        plusRow(icon: "doc.text.fill", title: "Documents") {
+                            dismissMenu(); showDocumentPicker = true
+                        }
+                    }
                 }
                 .padding(.vertical, SiriTheme.s)
                 .background(
@@ -379,7 +441,9 @@ struct ChatView: View {
         if viewModel.isSending { return }
         let text = inputText
         let images = pendingImages
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty else { return }
+        let fileImages = pendingFileImages
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !images.isEmpty || !fileImages.isEmpty else { return }
         voice.stopSpeaking()
         // Catat apakah pesan ini via voice — menentukan auto-speak jawaban AI.
         lastSentViaVoice = pendingVoiceInput
@@ -387,11 +451,14 @@ struct ChatView: View {
         voice.transcript = ""
         viewModel.send(
             conversation: conversation, text: text,
-            imageDatas: images.map { ($0, false) }, note: nil,
+            imageDatas: images.map { ($0, false) },
+            fileImages: fileImages,
+            note: nil,
             context: context, appState: appState
         )
         inputText = ""
         pendingImages = []
+        pendingFileImages = []
         fieldFocused = false
     }
 
@@ -409,6 +476,45 @@ struct ChatView: View {
         } else {
             pendingImages.append(data)
         }
+    }
+
+    /// Alur dokumen premium: pick → ekstrak → simpan sebagai source / gambar pending.
+    /// Gagal ekstrak = pesan error Indonesia, pesan kosong TIDAK dikirim.
+    @MainActor
+    private func handleDocumentPick(_ url: URL) {
+        let extracted: ExtractedFile
+        do {
+            extracted = try FileImportService.shared.extract(from: url)
+        } catch {
+            alertText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return
+        }
+        if extracted.kind == .image {
+            // Gambar: teks TIDAK diekstrak lokal — dikirim apa adanya via sendWithImages.
+            guard let data = extracted.imageData else {
+                alertText = "Gambar '\(extracted.fileName)' tidak bisa dibaca. Coba file lain."
+                return
+            }
+            pendingFileImages.append((data: data, mimeType: extracted.imageMimeType ?? "image/jpeg"))
+            return
+        }
+        // pdf / archive / raw: masuk sebagai source conversation (dibaca buildPrompt).
+        var text = extracted.textContent
+        if !extracted.metadata.isEmpty { text = extracted.metadata + "\n\n" + text }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            alertText = "File '\(extracted.fileName)' tidak menghasilkan teks yang bisa dibaca. Coba file lain."
+            return
+        }
+        guard StorageQuota.canAccommodate(Int64(text.utf8.count)) else {
+            alertText = StorageQuota.fullMessage
+            return
+        }
+        let source = SourceAttachment(fileName: extracted.fileName, extractedText: text)
+        conversation.sources.append(source)
+        conversation.updatedAt = Date()
+        try? context.save()
+        alertText = "Dokumen '\(extracted.fileName)' ditambahkan sebagai sumber. Tulis pertanyaanmu lalu kirim."
     }
 
     // MARK: - Free-limit banner.
