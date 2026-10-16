@@ -115,6 +115,28 @@ struct VoiceModelView: View {
                         set: { voice.speechRate = Float($0) }
                     ), in: 0.5...1.5, step: 0.05)
                     .tint(.white)
+                    // Reset speed — kiri bawah.
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            voice.speechRate = 1.0
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Reset Speed")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Color.white.opacity(0.12))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                    .accessibilityLabel(Text("Reset speed"))
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 24)

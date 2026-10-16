@@ -106,13 +106,14 @@ struct ConversationsView: View {
 
             // Inline search — overlay ala iOS: search bar kaca di atas + tombol mic & X.
             if showSearch {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.black)
                         TextField("Search", text: $searchText)
                             .submitLabel(.search)
+                            .font(.system(size: 17))
                         if !searchText.isEmpty {
                             Button {
                                 searchText = ""
@@ -123,19 +124,33 @@ struct ConversationsView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(.white.opacity(0.25))
+                        }
+                        .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                    )
 
                     // Mic button.
                     Button {
                         // TODO: voice search — pakai VoiceService yang sama.
                     } label: {
                         Image(systemName: "mic.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 44, height: 44)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.black)
+                            .frame(width: 48, height: 48)
+                            .background(
+                                ZStack {
+                                    Circle().fill(.ultraThinMaterial)
+                                    Circle().fill(.white.opacity(0.25))
+                                }
+                                .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                            )
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text("Voice search"))
@@ -148,10 +163,16 @@ struct ConversationsView: View {
                         }
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 44, height: 44)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.black)
+                            .frame(width: 48, height: 48)
+                            .background(
+                                ZStack {
+                                    Circle().fill(.ultraThinMaterial)
+                                    Circle().fill(.white.opacity(0.25))
+                                }
+                                .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                            )
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text("Close search"))
