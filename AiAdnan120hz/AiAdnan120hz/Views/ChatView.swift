@@ -27,6 +27,10 @@ struct ChatView: View {
     @State private var showFilePicker = false
     @State private var alertText: String?
     @State private var wasSending = false
+    /// True kalau pesan terakhir dikirim via voice input (mic) — AI wajib bersuara balik.
+    @State private var lastSentViaVoice = false
+    /// Flag sementara: inputText saat ini berasal dari voice transcript.
+    @State private var pendingVoiceInput = false
     @FocusState private var fieldFocused: Bool
 
     private var messages: [ChatMessage] {
@@ -184,9 +188,12 @@ struct ChatView: View {
         } message: {
             Text(alertText ?? "")
         }
-        // STT -> text field, live.
+        // STT -> text field, live. Tandai sebagai voice input.
         .onChange(of: voice.transcript) { _, t in
-            if voice.isRecording || !t.isEmpty { inputText = t }
+            if voice.isRecording || !t.isEmpty {
+                inputText = t
+                pendingVoiceInput = !t.isEmpty
+            }
         }
         // Auto-speak when the answer finishes.
         .onChange(of: viewModel.isSending) { _, sending in
@@ -369,6 +376,10 @@ struct ChatView: View {
         let images = pendingImages
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty else { return }
         voice.stopSpeaking()
+        // Catat apakah pesan ini via voice — menentukan auto-speak jawaban AI.
+        lastSentViaVoice = pendingVoiceInput
+        pendingVoiceInput = false
+        voice.transcript = ""
         viewModel.send(
             conversation: conversation, text: text,
             imageDatas: images.map { ($0, false) }, note: nil,
@@ -397,7 +408,8 @@ struct ChatView: View {
 
     @MainActor
     private func speakIfEnabled() {
-        guard appState.autoSpeak else { return }
+        // Voice input → AI WAJIB bersuara. Chat teks → hanya kalau toggle "Read AI responses aloud" ON.
+        guard lastSentViaVoice || appState.autoSpeak else { return }
         guard let last = messages.last(where: { $0.role == "assistant" }),
               last.errorText == nil, !last.text.isEmpty else { return }
         voice.speak(last.text)
