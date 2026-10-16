@@ -454,11 +454,12 @@ struct ChatView: View {
 
     @MainActor
     private func speakIfEnabled() {
-        // Voice input → AI WAJIB bersuara. Chat teks → hanya kalau toggle "Read AI responses aloud" ON.
+        // Gating via VoiceService.speakReply:
+        // Free → selalu diam (teks saja). Premium → hanya kalau toggle "Voice reply" ON.
         guard lastSentViaVoice || appState.autoSpeak else { return }
         guard let last = messages.last(where: { $0.role == "assistant" }),
               last.errorText == nil, !last.text.isEmpty else { return }
-        voice.speak(last.text)
+        voice.speakReply(last.text)
     }
 }
 
