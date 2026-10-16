@@ -84,6 +84,7 @@ struct FileImportService {
 
     private let maxPDFPages = 50
     private let maxPDFChars = 100 * 1024        // 100 KB teks
+    private let maxPDFBytes = 50 * 1024 * 1024  // 50 MB
     private let maxImageBytes = 20 * 1024 * 1024 // 20 MB
     private let maxArchiveBytes = 100 * 1024 * 1024 // 100 MB
 
@@ -139,6 +140,12 @@ struct FileImportService {
     // MARK: PDF
 
     private func extractPDF(from url: URL, fileName: String) throws -> ExtractedFile {
+        guard let size = fileSize(of: url) else {
+            throw FileImportError.cannotAccessFile(fileName)
+        }
+        if size > maxPDFBytes {
+            throw FileImportError.fileTooLarge("PDF '\(fileName)' (\(formatBytes(size))) melebihi batas 50 MB")
+        }
         guard let doc = PDFDocument(url: url), doc.pageCount > 0 else {
             throw FileImportError.pdfUnreadable("File '\(fileName)' tidak bisa dibuka atau tidak punya halaman.")
         }
@@ -162,7 +169,7 @@ struct FileImportService {
             chars += text.count
         }
 
-        let sizeText = fileSize(of: url).map { formatBytes($0) } ?? "ukuran tidak diketahui"
+        let sizeText = formatBytes(size)
         var meta = "Tipe: PDF • \(doc.pageCount) halaman • \(sizeText)"
         if doc.pageCount > maxPDFPages {
             meta += "\nCatatan: teks dipotong — hanya \(maxPDFPages) halaman pertama dari \(doc.pageCount) halaman yang dibaca."
@@ -400,7 +407,9 @@ private extension FileImportService {
             }
             if out.count >= maxStrings { break }
         }
-        flush()
+        // Flush terakhir hanya jika masih di bawah batas — tanpanya hasil
+        // bisa berisi maxStrings + 1 string.
+        if out.count < maxStrings { flush() }
         return out
     }
 
@@ -462,6 +471,11 @@ private extension FileImportService {
 
 // MARK: - ZIP reader (tanpa library, parse manual)
 
+/// Batas hasil dekompresi per entri ZIP (anti zip-bomb). Satu sumber
+/// kebenaran dipakai ZipReader (pre-check ukuran header) dan RawInflate
+/// (cap runtime) agar keduanya tidak pernah drift.
+private let zipMaxInflateBytes: UInt64 = 64 * 1024 * 1024 // 64 MB per entri
+
 /// Error internal pembaca ZIP.
 private enum ZipError: LocalizedError {
     case notAZip
@@ -492,8 +506,7 @@ private struct ZipEntry {
 }
 
 private enum ZipReader {
-    // Batas keamanan: cegah zip-bomb (dekompresi dibatasi).
-    private static let maxInflateBytes: UInt64 = 64 * 1024 * 1024 // 64 MB per entri
+    // Batas keamanan: cegah zip-bomb (lihat zipMaxInflateBytes).
     private static let maxEntries = 100_000
 
     // MARK: little-endian readers (bounds-checked, tanpa force-unwrap)
@@ -525,17 +538,30 @@ private enum ZipReader {
         var i = data.count - 22
         while i >= searchStart {
             if data[i] == sig[0] && data[i + 1] == sig[1]
-                && data[i + 2] == sig[2] && data[i + 3] == sig[3] {
+                && data[i + 2] == sig[2] && data[i + 3] == sig[3],
+               let commentLen = u16(data, i + 20),
+               // EOCD yang asli harus berakhir tepat di ujung file.
+               // Signature PK\x05\x06 yang muncul di dalam komentar zip
+               // (false positive) dilewati — lanjut scan ke belakang.
+               i + 22 + Int(commentLen) == data.count {
                 eocdOffset = i
                 break
             }
             i -= 1
         }
         guard let eocd = eocdOffset,
+              let diskNumber = u16(data, eocd + 4),
+              let cdDisk = u16(data, eocd + 6),
+              let entriesThisDisk = u16(data, eocd + 8),
               let totalEntries = u16(data, eocd + 10),
               let cdSize = u32(data, eocd + 12),
               let cdOffset = u32(data, eocd + 16) else {
             throw ZipError.notAZip
+        }
+        // Tolak eksplisit arsip multi-disk (spanned): offset central directory
+        // di EOCD merujuk ke disk lain, jadi parse single-file tidak valid.
+        if diskNumber != 0 || cdDisk != 0 || entriesThisDisk != totalEntries {
+            throw ZipError.unsupported("arsip multi-disk (spanned) tidak didukung")
         }
         if totalEntries > maxEntries {
             throw ZipError.corrupt("jumlah entri tidak wajar (\(totalEntries))")
@@ -614,7 +640,7 @@ private enum ZipReader {
         if entry.method != 0 && entry.method != 8 {
             throw ZipError.unsupported("metode kompresi \(entry.method) untuk '\(entry.name)' tidak didukung (hanya stored/deflated)")
         }
-        if entry.uncompressedSize > maxInflateBytes {
+        if entry.uncompressedSize > zipMaxInflateBytes {
             throw ZipError.unsupported("entri '\(entry.name)' melebihi 64 MB hasil ekstraksi")
         }
 
@@ -861,7 +887,7 @@ private enum RawInflate {
     /// Dekompresi satu stream DEFLATE mentah. `expectedSize` = ukuran
     /// uncompressed dari header ZIP (dipakai untuk reserve + validasi).
     static func decompress(_ input: [UInt8], expectedSize: UInt64) throws -> [UInt8] {
-        let cap: UInt64 = 64 * 1024 * 1024 // 64 MB — anti zip-bomb
+        let cap: UInt64 = zipMaxInflateBytes // anti zip-bomb
         var r = BitReader(bytes: input)
         var output: [UInt8] = []
         output.reserveCapacity(Int(min(expectedSize, cap)))

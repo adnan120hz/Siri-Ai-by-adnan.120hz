@@ -33,8 +33,12 @@ Skema (harus cocok byte-per-byte di `AiAdnan120hz/AiAdnan120hz/RedeemValidator.s
 dan `tools/mint_redeem_code.py`):
 
 - Alphabet: `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (31 char, tanpa 0/O/1/I/L)
-- Checksum = 4 char: `alphabet[ HMAC-SHA256(key: secret, data: payload)[i] % 31 ]`, i=0..<4
+- Checksum = 4 char: `alphabet[ HMAC-SHA256(key: secret, data: payload)[i] % len(alphabet) ]`, i=0..<4
 - Format: `SIRI-<payload4>-<checksum4>`
+- Normalisasi input (identik di Swift & Python): buang SEMUA whitespace,
+  jadikan huruf besar — jadi `  siri-abcd-kska\n` dan `SIRI-AB CD-KSKA`
+  tetap diterima. Bandingkan checksum dengan compare constant-time
+  (`hmac.compare_digest` di Python, loop XOR di Swift).
 
 **Test vector:**
 
@@ -49,12 +53,14 @@ Hitungan manual dari digest `47 8b 47 5d …`:
 - `0x47`=71  → `K`
 - `0x5d`=93, 93 % 31 = 0  → alphabet[0]  = `A`
 
-Cek di Python:
+Cek di Python (jalankan dari folder `tools/` agar modul ketemu):
 
 ```sh
+cd tools
 REDEEM_SECRET=TEST python3 -c "
 from mint_redeem_code import verify
 print(verify('SIRI-ABCD-KSKA', 'TEST'))  # harus True
+print(verify('  siri-abcd-kska', 'TEST'))  # harus True (normalize)
 "
 ```
 

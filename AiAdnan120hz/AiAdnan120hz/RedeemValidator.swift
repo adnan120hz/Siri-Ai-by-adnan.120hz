@@ -21,9 +21,11 @@ enum RedeemValidator {
 
     private static let alphabet = Array("ABCDEFGHJKMNPQRSTUVWXYZ23456789")
 
-    /// Normalisasi input user: buang spasi di ujung, jadikan huruf besar.
+    /// Normalisasi input user: buang SEMUA whitespace (termasuk spasi di tengah
+    /// dan newline dari paste), jadikan huruf besar.
+    /// Harus identik dengan normalisasi di tools/mint_redeem_code.py:verify().
     static func normalize(_ code: String) -> String {
-        code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        code.filter { !$0.isWhitespace }.uppercased()
     }
 
     /// Validasi kode redeem terhadap secret.

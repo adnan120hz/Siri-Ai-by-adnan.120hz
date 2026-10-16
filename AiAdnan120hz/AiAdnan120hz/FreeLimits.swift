@@ -37,20 +37,37 @@ enum FreeLimits {
 
     static func todayCount() -> Int {
         let d = UserDefaults.standard
-        guard d.string(forKey: dailyDateKey) == todayKey() else { return 0 }
-        return d.integer(forKey: dailyCountKey)
+        let today = todayKey()
+        guard let stored = d.string(forKey: dailyDateKey) else { return 0 }
+        if stored == today { return d.integer(forKey: dailyCountKey) }
+        if stored > today {
+            // Jam perangkat dimundurkan (atau lintas garis tanggal ke barat)
+            // setelah kuota dipakai: JANGAN beri kuota baru — pakai hitungan
+            // tersimpan supaya limit harian tak bisa di-reset dengan memutar jam.
+            // Perbandingan string aman karena format "yyyy-MM-dd" terurut
+            // leksikografis sama seperti terurut kronologis.
+            return d.integer(forKey: dailyCountKey)
+        }
+        return 0
     }
 
     static func canSendToday() -> Bool {
         todayCount() < maxPerDay
     }
 
-    /// Catat 1 pesan user terkirim. Bila tanggal beda → reset ke 1.
+    /// Catat 1 pesan user terkirim. Bila tanggal beda (maju) → reset ke 1.
+    /// Bila tanggal tersimpan di masa depan (jam dimundurkan, lihat todayCount)
+    /// → lanjutkan hitungan lama, jangan reset.
     /// Dipanggil sekali per pengiriman user yang lolos gate (lihat send()).
     static func recordSent() {
         let d = UserDefaults.standard
         let today = todayKey()
-        if d.string(forKey: dailyDateKey) == today {
+        let stored = d.string(forKey: dailyDateKey)
+        let clockTurnedBack: Bool = {
+            guard let stored else { return false }
+            return stored > today
+        }()
+        if stored == today || clockTurnedBack {
             d.set(d.integer(forKey: dailyCountKey) + 1, forKey: dailyCountKey)
         } else {
             d.set(today, forKey: dailyDateKey)

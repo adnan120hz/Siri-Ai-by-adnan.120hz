@@ -21,7 +21,7 @@ ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # 31 char, tanpa 0/O/1/I/L
 
 def _checksum(payload: str, secret: str) -> str:
     mac = hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).digest()
-    return "".join(ALPHABET[b % 31] for b in mac[:4])
+    return "".join(ALPHABET[b % len(ALPHABET)] for b in mac[:4])
 
 
 def mint(secret: str) -> str:
@@ -30,17 +30,18 @@ def mint(secret: str) -> str:
 
 
 def _constant_time_equal(a: str, b: str) -> bool:
-    au, bu = a.encode(), b.encode()
-    if len(au) != len(bu):
-        return False
-    diff = 0
-    for x, y in zip(au, bu):
-        diff |= x ^ y
-    return diff == 0
+    # hmac.compare_digest: constant-time, return False bila panjang beda.
+    return hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+
+
+def _normalize(code: str) -> str:
+    # Identik dengan RedeemValidator.normalize() di Swift:
+    # buang SEMUA whitespace (bukan cuma di ujung), jadikan huruf besar.
+    return "".join(code.split()).upper()
 
 
 def verify(code: str, secret: str) -> bool:
-    code = code.strip().upper()
+    code = _normalize(code)
     if len(code) != 14:
         return False
     parts = code.split("-")
