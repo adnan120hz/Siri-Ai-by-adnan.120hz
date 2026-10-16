@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import Combine
 
 // MARK: - Orkestrasi kirim chat: bangun konteks → Gemini → simpan → ingatan.
 // Transport: GeminiClient (key TANAM via Secrets, tanpa input manual).
@@ -10,6 +11,20 @@ final class ChatViewModel: ObservableObject {
     @Published var isSending = false
     @Published var streamingText = ""
     @Published var lastError: String?
+    /// Free-limit block: ditampilkan sebagai banner di ChatView (nil = tidak ada blokir).
+    @Published var limitNotice: LimitNotice?
+
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        // Kalau user redeem di tengah sesi: bersihkan banner limit yang sudah basi.
+        PremiumState.shared.$isPremium
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] premium in
+                if premium { self?.limitNotice = nil }
+            }
+            .store(in: &cancellables)
+    }
 
     private var sendTask: Task<Void, Never>?
     /// True kalau cancel() dipanggil eksplisit (tombol stop). Bedakan dari
@@ -33,6 +48,8 @@ final class ChatViewModel: ObservableObject {
         }
         return false
     }
+
+    // MARK: - Kirim pesan
 
     /// Kirim pesan user + gambar. `imageDatas` = JPEG siap kirim (foto/video frames).
     func send(conversation: Conversation, text: String,
@@ -59,6 +76,33 @@ final class ChatViewModel: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !imageDatas.isEmpty else { return }
 
+        limitNotice = nil
+        // FREE LIMITS (premium melewati). Urutan: per-chat dulu, baru per-hari.
+        if !PremiumState.shared.isPremium {
+            guard FreeLimits.canSendInChat(conversation: conversation) else {
+                print("[SiriAi] send(): blocked — per-chat free limit (20) tercapai")
+                limitNotice = LimitNotice(kind: .perChat)
+                return
+            }
+            guard FreeLimits.canSendToday() else {
+                print("[SiriAi] send(): blocked — daily free limit (40) tercapai")
+                limitNotice = LimitNotice(kind: .perDay)
+                return
+            }
+        }
+
+        // STORAGE: tolak sebelum menulis kalau proyeksi melebihi cap dinamis
+        // (25 GB free / 50 GB premium). Teks = estimasi lampiran + teks pesan;
+        // ini best-effort karena SwiftData save-nya implisit (lihat catatan di
+        // bawah), bukan enforcement total.
+        let incomingBytes = Int64(imageDatas.reduce(0) { $0 + $1.data.count })
+            + Int64(trimmed.utf8.count)
+        guard StorageQuota.canAccommodate(incomingBytes) else {
+            print("[SiriAi] send(): blocked — storage quota tercapai")
+            lastError = StorageQuota.fullMessage
+            return
+        }
+
         lastError = nil
         isSending = true
         streamingText = ""
@@ -79,6 +123,11 @@ final class ChatViewModel: ObservableObject {
             }
         }
         try? context.save()
+        // Catatan jujur storage: SwiftData menyimpan implisit via context.save();
+        // enforcement kuota di sini best-effort (cek proyeksi sebelum append di
+        // atas), bukan enforcement total di level database.
+        // Definisi "1 pesan" = 1 pesan user yang berhasil dikirim (free tier saja).
+        if !PremiumState.shared.isPremium { FreeLimits.recordSent() }
 
         // 2. Bangun prompt: system instruction + riwayat + pesan saat ini.
         let (system, history) = buildPrompt(conversation: conversation, context: context,
@@ -233,4 +282,14 @@ final class ChatViewModel: ObservableObject {
         }
         return (system, history)
     }
+}
+
+// MARK: - Free-limit block: jenis blokir pengiriman untuk free tier.
+
+/// Alasan pemblokiran free-limit. ChatView menampilkannya sebagai banner
+/// dengan tombol aksi (Buat chat baru / Get subscriptions).
+struct LimitNotice: Identifiable {
+    enum Kind { case perChat, perDay }
+    let id = UUID()
+    let kind: Kind
 }

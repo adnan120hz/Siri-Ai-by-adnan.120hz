@@ -142,6 +142,11 @@ struct ChatView: View {
                 }
             }
 
+            // Free-limit banner: muncul saat pengiriman diblokir (20/chat atau 40/hari).
+            if let notice = viewModel.limitNotice {
+                limitBanner(for: notice)
+            }
+
             // Bottom bar.
             HStack(spacing: 10) {
                 SiriCircleButton(systemImage: "plus", imageSize: 24) {
@@ -404,6 +409,47 @@ struct ChatView: View {
         } else {
             pendingImages.append(data)
         }
+    }
+
+    // MARK: - Free-limit banner.
+
+    /// Banner blokir free-limit. Teks VERBATIM kontrak — jangan diubah.
+    @ViewBuilder
+    private func limitBanner(for notice: LimitNotice) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.circle")
+                .foregroundStyle(.orange)
+            Text(notice.kind == .perChat
+                 ? "Limit 20 pesan per chat tercapai. Buat chat baru untuk lanjut."
+                 : "tunggu besok, limit harian anda sudah habis. jika ingin limit lebih banyak, get subscriptions")
+                .font(.footnote)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            if notice.kind == .perChat {
+                Button("Buat chat baru") { showConversations = true }
+                    .font(.footnote.bold())
+            } else {
+                Button("Get subscriptions") {
+                    if let url = URL(string: "https://wa.me/message/BXRJINLRDEXDI1") {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                .font(.footnote.bold())
+            }
+            Button {
+                viewModel.limitNotice = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.footnote)
+            }
+        }
+        .padding(.horizontal, SiriTheme.m)
+        .padding(.vertical, SiriTheme.s)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.orange.opacity(0.12))
+        )
+        .padding(.horizontal, SiriTheme.m)
     }
 
     @MainActor

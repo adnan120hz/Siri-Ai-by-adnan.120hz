@@ -199,6 +199,16 @@ final class VoiceService: ObservableObject {
         }
         print("[SiriAi] Voice: recognizer ready")
 
+        // Guard 2b: storage quota — blokir rekaman kalau cap sudah tercapai.
+        // Ukuran rekaman belum diketahui sebelumnya (jujur), jadi ini hanya
+        // menolak saat usedBytes sudah ≥ cap dinamis (25 GB free / 50 GB premium).
+        guard StorageQuota.canAccommodate(0) else {
+            print("[SiriAi] Voice: blocked — storage quota tercapai")
+            permissionError = StorageQuota.fullMessage
+            phase = .idle
+            return
+        }
+
         // Guard 3: audio session.
         do {
             let session = AVAudioSession.sharedInstance()

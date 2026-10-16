@@ -27,3 +27,4 @@ DerivedData/
 
 # Generated at build time — NEVER commit real secrets
 AiAdnan120hz/AiAdnan120hz/Secrets.swift
+__pycache__/
