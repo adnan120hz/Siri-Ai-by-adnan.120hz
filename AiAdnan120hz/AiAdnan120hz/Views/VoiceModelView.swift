@@ -16,6 +16,15 @@ struct VoiceModelView: View {
         }
     }
 
+    /// Model yang tersedia per bahasa. Indonesia cuma punya 1 suara sistem (cewek),
+    /// jadi opsi Cowok disembunyikan — tidak ada suara cowok asli id-ID.
+    private var availableModels: [VoiceModel] {
+        switch voice.voiceLanguage {
+        case .indonesian: return [.robot, .female]
+        case .english: return VoiceModel.allCases
+        }
+    }
+
     /// Test suara pakai kalimat sesuai bahasa terpilih.
     private func playSample() {
         let model = voice.voiceModel
@@ -49,6 +58,10 @@ struct VoiceModelView: View {
                         ForEach(VoiceLanguage.allCases) { lang in
                             Button {
                                 voice.voiceLanguage = lang
+                                // Pindah ke Indonesia saat Cowok kepilih → ganti ke Cewek.
+                                if lang == .indonesian && voice.voiceModel == .male {
+                                    voice.voiceModel = .female
+                                }
                                 playSample()
                             } label: {
                                 HStack {
@@ -78,9 +91,9 @@ struct VoiceModelView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
 
-                // 3 warna: robot, cowok, cewek.
+                // Pilihan suara (Cowok disembunyikan pas bahasa Indonesia).
                 HStack(spacing: 20) {
-                    ForEach(VoiceModel.allCases) { model in
+                    ForEach(availableModels) { model in
                         Button {
                             withAnimation(.spring(response: 0.4)) {
                                 voice.voiceModel = model

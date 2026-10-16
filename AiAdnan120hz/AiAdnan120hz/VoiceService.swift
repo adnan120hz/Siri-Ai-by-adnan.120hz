@@ -28,18 +28,14 @@ enum VoiceModel: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Pitch untuk tiap model (1.0 = normal). Robot pakai pitch ekstrem biar kedengeran robotik.
-    /// Untuk bahasa yang cuma punya 1 suara sistem (id-ID), pitch dibuat LEBAR
-    /// biar ketiganya kedengeran beda jelas.
+    /// Pitch untuk tiap model (1.0 = normal).
+    /// Robot 0.7: rendah + monoton = robotik, tapi masih ada ruang buat expressivity.
+    /// Cowok/Cewek 1.0: natural — identitas suara asli yang bedain.
     func pitch(for language: VoiceLanguage) -> Float {
         switch self {
-        case .robot: return 0.5   // Sangat rendah + monoton = robotik
-        case .male:
-            // English: suara cowok asli ketemu → pitch natural.
-            // Indonesia: cuma 1 suara → turunin jauh biar beda.
-            return language == .english ? 0.95 : 0.72
-        case .female:
-            return language == .english ? 1.05 : 1.32
+        case .robot: return 0.7
+        case .male: return 1.0
+        case .female: return 1.0
         }
     }
 
@@ -361,14 +357,21 @@ final class VoiceService: ObservableObject {
         let model = VoiceModel(rawValue: modelRaw) ?? .female
         let langRaw = UserDefaults.standard.string(forKey: "voiceLanguage") ?? "id-ID"
         let language = VoiceLanguage(rawValue: langRaw) ?? .indonesian
+        // Safety: Cowok tidak tersedia untuk Indonesia (cuma ada 1 suara id-ID).
+        if language == .indonesian && model == .male {
+            model = .female
+        }
         utterance.voice = Self.resolveVoice(language: language, model: model)
             ?? AVSpeechSynthesisVoice(language: language.rawValue)
             ?? AVSpeechSynthesisVoice(language: "en-US")
         let rate = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0
         let expressivity = UserDefaults.standard.object(forKey: "expressivity") as? Float ?? 0.5
-        // Expressivity jadi faktor pitch: 0.0 → 0.8x (nge-bass), 0.5 → 1.0x (normal), 1.0 → 1.2x (cempreng).
-        let expressivityFactor = 0.8 + expressivity * 0.4
-        utterance.pitchMultiplier = model.pitch(for: language) * expressivityFactor
+        // Expressivity sebagai offset aditif (bukan pengali) biar work di semua model:
+        // 0.0 → -0.3 (nge-bass), 0.5 → 0 (normal), 1.0 → +0.3 (cempreng).
+        // Clamp ke range valid AVSpeechUtterance [0.5, 2.0].
+        let offset = (expressivity - 0.5) * 0.6
+        let finalPitch = min(2.0, max(0.5, model.pitch(for: language) + offset))
+        utterance.pitchMultiplier = finalPitch
         utterance.rate = rate * model.rateMultiplier * AVSpeechUtteranceDefaultSpeechRate
         synthesizer.speak(utterance)
     }
