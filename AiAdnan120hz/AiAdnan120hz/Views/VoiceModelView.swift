@@ -6,7 +6,7 @@ import AVFoundation
 // Tap suara → preview langsung. Tap checkmark → jadikan suara default untuk TTS.
 
 struct VoiceModelView: View {
-    @StateObject private var voice = VoiceService()
+    @ObservedObject private var voice = VoiceService.shared
     @ObservedObject private var premium = PremiumState.shared
     @Environment(\.dismiss) private var dismiss
 

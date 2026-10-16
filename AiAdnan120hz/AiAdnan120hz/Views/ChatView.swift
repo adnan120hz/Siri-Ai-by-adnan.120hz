@@ -11,7 +11,7 @@ struct ChatView: View {
     @Environment(\.modelContext) private var context
     @EnvironmentObject var appState: AppState
     @StateObject private var viewModel = ChatViewModel()
-    @StateObject private var voice = VoiceService()
+    @ObservedObject private var voice = VoiceService.shared
     // Gating fitur premium di composer: UI refresh saat redeem/toggle berubah.
     @ObservedObject private var premiumState = PremiumState.shared
     @ObservedObject private var premiumFeatures = PremiumFeatures.shared
@@ -490,12 +490,17 @@ struct ChatView: View {
             return
         }
         if extracted.kind == .image {
-            // Gambar: teks TIDAK diekstrak lokal — dikirim apa adanya via sendWithImages.
+            // Gambar: teks TIDAK diekstrak lokal — dikirim via sendWithImages.
+            // Downscale dulu (maks 1024px, seperti foto kamera) agar tidak timeout/OOM.
             guard let data = extracted.imageData else {
                 alertText = "Gambar '\(extracted.fileName)' tidak bisa dibaca. Coba file lain."
                 return
             }
-            pendingFileImages.append((data: data, mimeType: extracted.imageMimeType ?? "image/jpeg"))
+            if let scaled = MediaService.downscaleJPEG(data) {
+                pendingFileImages.append((data: scaled, mimeType: "image/jpeg"))
+            } else {
+                pendingFileImages.append((data: data, mimeType: extracted.imageMimeType ?? "image/jpeg"))
+            }
             return
         }
         // pdf / archive / raw: masuk sebagai source conversation (dibaca buildPrompt).

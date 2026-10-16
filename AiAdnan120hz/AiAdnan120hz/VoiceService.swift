@@ -76,6 +76,10 @@ enum VoiceLanguage: String, CaseIterable, Identifiable {
 
 @MainActor
 final class VoiceService: ObservableObject {
+    /// Instance bersama — toggle (mis. voiceReplyEnabled) yang diubah di satu
+    /// view langsung terlihat di view lain. Semua state tetap persist ke UserDefaults.
+    static let shared = VoiceService()
+
     private enum Phase { case idle, preparing, recording, transcribing }
 
     @Published var isRecording = false
