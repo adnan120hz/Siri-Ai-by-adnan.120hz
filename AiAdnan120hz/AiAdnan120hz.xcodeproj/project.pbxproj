@@ -10,6 +10,7 @@
 		A875C0E1182E0FC8CFF4F3DF /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0DBAD9A0DB8EE1797090F67 /* Models.swift */; };
 		FD5C1E28C54839A54F0BF063 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66FD2A1109E4240E5F700D2D /* KeychainStore.swift */; };
 		E8F54F3AAEAE2429B84E4829 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60A3332900E007291C4D2501 /* APIClient.swift */; };
+		587FE95BFB3746D2953E02B40F65271D /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8493465D57FB4170849F09BB7AC40303 /* Secrets.swift */; };
 		631E43E6F615B849A1268CB8 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72612619AFEA3F28D48495FE /* ChatViewModel.swift */; };
 		C0129ACCD92E3FE44AD6123E /* MediaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61363FBBF40DADEDAA717D84 /* MediaService.swift */; };
 		634A9FA4EA04A6EB2257BD34 /* SourceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB9111ED4C6C84430991C974 /* SourceExtractor.swift */; };
@@ -42,6 +43,7 @@
 		F0DBAD9A0DB8EE1797090F67 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models.swift"; sourceTree = "<group>"; };
 		66FD2A1109E4240E5F700D2D /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KeychainStore.swift"; sourceTree = "<group>"; };
 		60A3332900E007291C4D2501 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient.swift"; sourceTree = "<group>"; };
+		8493465D57FB4170849F09BB7AC40303 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Secrets.swift"; sourceTree = "<group>"; };
 		72612619AFEA3F28D48495FE /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatViewModel.swift"; sourceTree = "<group>"; };
 		61363FBBF40DADEDAA717D84 /* MediaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MediaService.swift"; sourceTree = "<group>"; };
 		FB9111ED4C6C84430991C974 /* SourceExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SourceExtractor.swift"; sourceTree = "<group>"; };
@@ -94,6 +96,7 @@
 				F0DBAD9A0DB8EE1797090F67 /* Models.swift */,
 				66FD2A1109E4240E5F700D2D /* KeychainStore.swift */,
 				60A3332900E007291C4D2501 /* APIClient.swift */,
+				8493465D57FB4170849F09BB7AC40303 /* Secrets.swift */,
 				72612619AFEA3F28D48495FE /* ChatViewModel.swift */,
 				61363FBBF40DADEDAA717D84 /* MediaService.swift */,
 				FB9111ED4C6C84430991C974 /* SourceExtractor.swift */,
@@ -223,6 +226,7 @@
 				A875C0E1182E0FC8CFF4F3DF /* Models.swift in Sources */,
 				FD5C1E28C54839A54F0BF063 /* KeychainStore.swift in Sources */,
 				E8F54F3AAEAE2429B84E4829 /* APIClient.swift in Sources */,
+				587FE95BFB3746D2953E02B40F65271D /* Secrets.swift in Sources */,
 				631E43E6F615B849A1268CB8 /* ChatViewModel.swift in Sources */,
 				C0129ACCD92E3FE44AD6123E /* MediaService.swift in Sources */,
 				634A9FA4EA04A6EB2257BD34 /* SourceExtractor.swift in Sources */,
