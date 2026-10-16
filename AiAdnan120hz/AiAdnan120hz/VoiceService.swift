@@ -29,11 +29,17 @@ enum VoiceModel: String, CaseIterable, Identifiable {
     }
 
     /// Pitch untuk tiap model (1.0 = normal). Robot pakai pitch ekstrem biar kedengeran robotik.
-    var pitch: Float {
+    /// Untuk bahasa yang cuma punya 1 suara sistem (id-ID), pitch dibuat LEBAR
+    /// biar ketiganya kedengeran beda jelas.
+    func pitch(for language: VoiceLanguage) -> Float {
         switch self {
         case .robot: return 0.5   // Sangat rendah + monoton = robotik
-        case .male: return 0.85   // Rendah = maskulin
-        case .female: return 1.15 // Tinggi = feminin
+        case .male:
+            // English: suara cowok asli ketemu → pitch natural.
+            // Indonesia: cuma 1 suara → turunin jauh biar beda.
+            return language == .english ? 0.95 : 0.72
+        case .female:
+            return language == .english ? 1.05 : 1.32
         }
     }
 
@@ -353,7 +359,7 @@ final class VoiceService: ObservableObject {
             ?? AVSpeechSynthesisVoice(language: language.rawValue)
             ?? AVSpeechSynthesisVoice(language: "en-US")
         let rate = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0
-        utterance.pitchMultiplier = model.pitch
+        utterance.pitchMultiplier = model.pitch(for: language)
         utterance.rate = rate * model.rateMultiplier * AVSpeechUtteranceDefaultSpeechRate
         synthesizer.speak(utterance)
     }
