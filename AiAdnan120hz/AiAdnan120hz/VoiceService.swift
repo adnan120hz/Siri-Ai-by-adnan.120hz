@@ -354,7 +354,7 @@ final class VoiceService: ObservableObject {
         let utterance = AVSpeechUtterance(string: trimmed)
         // Baca dari UserDefaults langsung (bisa diubah dari VoiceModelView instance lain).
         let modelRaw = UserDefaults.standard.string(forKey: "voiceModel") ?? "female"
-        let model = VoiceModel(rawValue: modelRaw) ?? .female
+        var model = VoiceModel(rawValue: modelRaw) ?? .female
         let langRaw = UserDefaults.standard.string(forKey: "voiceLanguage") ?? "id-ID"
         let language = VoiceLanguage(rawValue: langRaw) ?? .indonesian
         // Safety: Cowok tidak tersedia untuk Indonesia (cuma ada 1 suara id-ID).
