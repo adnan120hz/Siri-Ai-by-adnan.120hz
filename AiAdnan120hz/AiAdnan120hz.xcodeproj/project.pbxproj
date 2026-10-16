@@ -19,6 +19,7 @@
 		BE046D60D09148C99F102335 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227E788305B34D3F93F53106 /* ChatView.swift */; };
 		C22B8E528B144DA8BF15A8FB /* ConversationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B7C33A8824631B03EDD44 /* ConversationsView.swift */; };
 		67BEC9F706B740F19460C12C /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA014E1E35A40F58E0C4247 /* SettingsView.swift */; };
+		875D863F80E9C2268365F342 /* VoiceModelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC719E2AE122A43F93337F4A /* VoiceModelView.swift */; };
 		295E2272DA304791BEFFB66C /* MediaPickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3A16340B3314E76B5C48392 /* MediaPickers.swift */; };
 		59829766AE5C41618C41E762 /* AppRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 705BE698198940F586A86820 /* AppRoot.swift */; };
 		A8E451B7717D6E238350F51F /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2E33546EEAAFA51A3CE4A56 /* OnboardingView.swift */; };
@@ -50,6 +51,7 @@
 		227E788305B34D3F93F53106 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatView.swift"; sourceTree = "<group>"; };
 		9F7B7C33A8824631B03EDD44 /* ConversationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationsView.swift"; sourceTree = "<group>"; };
 		1EA014E1E35A40F58E0C4247 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
+		FC719E2AE122A43F93337F4A /* VoiceModelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VoiceModelView.swift"; sourceTree = "<group>"; };
 		B3A16340B3314E76B5C48392 /* MediaPickers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MediaPickers.swift"; sourceTree = "<group>"; };
 		705BE698198940F586A86820 /* AppRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppRoot.swift"; sourceTree = "<group>"; };
 		F2E33546EEAAFA51A3CE4A56 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OnboardingView.swift"; sourceTree = "<group>"; };
@@ -117,6 +119,7 @@
 				227E788305B34D3F93F53106 /* ChatView.swift */,
 				9F7B7C33A8824631B03EDD44 /* ConversationsView.swift */,
 				1EA014E1E35A40F58E0C4247 /* SettingsView.swift */,
+				FC719E2AE122A43F93337F4A /* VoiceModelView.swift */,
 				B3A16340B3314E76B5C48392 /* MediaPickers.swift */,
 				705BE698198940F586A86820 /* AppRoot.swift */,
 				F2E33546EEAAFA51A3CE4A56 /* OnboardingView.swift */,
@@ -230,6 +233,7 @@
 				BE046D60D09148C99F102335 /* ChatView.swift in Sources */,
 				C22B8E528B144DA8BF15A8FB /* ConversationsView.swift in Sources */,
 				67BEC9F706B740F19460C12C /* SettingsView.swift in Sources */,
+				875D863F80E9C2268365F342 /* VoiceModelView.swift in Sources */,
 				295E2272DA304791BEFFB66C /* MediaPickers.swift in Sources */,
 				59829766AE5C41618C41E762 /* AppRoot.swift in Sources */,
 				A8E451B7717D6E238350F51F /* OnboardingView.swift in Sources */,
