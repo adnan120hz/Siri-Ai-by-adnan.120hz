@@ -84,15 +84,7 @@ struct ConversationsView: View {
                             Label("Settings", systemImage: "gearshape")
                         }
                     } label: {
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 44, height: 44)
-                            .background(
-                                Circle()
-                                    .fill(.white)
-                                    .shadow(color: .black.opacity(0.06), radius: 4, y: 1)
-                            )
+                        SiriHamburgerIcon()
                     }
                     .tint(.primary)
                     .accessibilityLabel(Text("View options"))
@@ -111,29 +103,58 @@ struct ConversationsView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // Inline search.
+            // Inline search — overlay ala iOS: search bar kaca di atas + tombol mic & X.
             if showSearch {
-                HStack(spacing: SiriTheme.s) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search conversations", text: $searchText)
-                        .submitLabel(.search)
-                    if !searchText.isEmpty {
-                        Button {
-                            searchText = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        TextField("Search", text: $searchText)
+                            .submitLabel(.search)
+                        if !searchText.isEmpty {
+                            Button {
+                                searchText = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                    // Mic button.
+                    Button {
+                        // TODO: voice search — pakai VoiceService yang sama.
+                    } label: {
+                        Image(systemName: "mic.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 44, height: 44)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("Voice search"))
+
+                    // X close button.
+                    Button {
+                        withAnimation(SiriTheme.liquid) {
+                            showSearch = false
+                            searchText = ""
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 44, height: 44)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("Close search"))
                 }
-                .padding(.horizontal, SiriTheme.m)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color(.systemGray6))
-                )
                 .padding(.horizontal, SiriTheme.m)
                 .padding(.bottom, SiriTheme.s)
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -462,6 +483,31 @@ struct ConversationsView: View {
     }
 }
 
+// MARK: - Hamburger icon custom: lingkaran putih + 3 garis hitam menebal ke atas.
+// Sesuai referensi: garis paling atas paling panjang, mengecil ke bawah.
+
+struct SiriHamburgerIcon: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.white)
+                .shadow(color: .black.opacity(0.06), radius: 4, y: 1)
+            VStack(spacing: 5) {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(.black)
+                    .frame(width: 26, height: 5)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(.black)
+                    .frame(width: 20, height: 5)
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(.black)
+                    .frame(width: 14, height: 5)
+            }
+        }
+        .frame(width: 44, height: 44)
+    }
+}
+
 // MARK: - Masonry card: REAL photo full-bleed, date + title overlaid at top.
 // Height follows the real photo aspect ratio (natural masonry rhythm).
 // Staggered spring entrance: 0.05s delay per index.
@@ -490,12 +536,13 @@ struct MasonryCard: View {
         cachedPhoto = nil
     }
 
-    /// Card aspect (h/w): real photo ratio clamped, else varied rhythm.
+    /// Card aspect (h/w): real photo ratio clamped.
+    /// Grid pakai rasio seragam biar kotak-kotak sejajar rapi (tidak ada yang naik/turun).
     private var aspect: CGFloat {
         if let ui = cachedPhoto, ui.size.width > 0 {
-            return min(1.6, max(0.75, ui.size.height / ui.size.width))
+            return min(1.3, max(0.9, ui.size.height / ui.size.width))
         }
-        return [1.05, 1.3, 0.9][index % 3]
+        return 1.1
     }
 
     private var dateText: String {

@@ -1,8 +1,7 @@
 import SwiftUI
 
-// MARK: - Voice Model: pilih suara AI (Robot / Cowok / Cewek)
-// UI ala iOS 27: orb bercahaya di atas, 3 warna, slider pace.
-// Beda warna = beda suara. Tanpa menu bahasa (AI menyesuaikan sendiri).
+// MARK: - Voice Model: pilih suara AI (Robot / Cowok / Cewek) + bahasa (English / Indonesia)
+// UI ala iOS 27: orb bercahaya di atas, 3 warna, slider pace, dropdown bahasa.
 
 struct VoiceModelView: View {
     @StateObject private var voice = VoiceService()
@@ -17,6 +16,19 @@ struct VoiceModelView: View {
         }
     }
 
+    /// Test suara pakai kalimat sesuai bahasa terpilih.
+    private func playSample() {
+        let model = voice.voiceModel
+        let sample: String
+        switch voice.voiceLanguage {
+        case .english:
+            sample = "Hello, this is the \(model.title) voice."
+        case .indonesian:
+            sample = "Halo, ini suara \(model.title)."
+        }
+        voice.speak(sample)
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -27,19 +39,41 @@ struct VoiceModelView: View {
                     .frame(height: 280)
                     .padding(.top, 20)
 
-                // Label "Voice" (tanpa menu bahasa).
+                // Label "Voice" + dropdown bahasa (English / Indonesia).
                 HStack {
                     Text("Voice")
                         .font(.title2)
                         .foregroundStyle(.white)
                     Spacer()
-                    Text(voice.voiceModel.title)
-                        .font(.title3)
-                        .foregroundStyle(.white.opacity(0.7))
+                    Menu {
+                        ForEach(VoiceLanguage.allCases) { lang in
+                            Button {
+                                voice.voiceLanguage = lang
+                                playSample()
+                            } label: {
+                                HStack {
+                                    Text(lang.title)
+                                    if voice.voiceLanguage == lang {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(voice.voiceLanguage.title)
+                                .font(.title3)
+                                .foregroundStyle(.white.opacity(0.85))
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.6))
+                        }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .background(Color.white.opacity(0.15))
                         .clipShape(Capsule())
+                    }
+                    .accessibilityLabel(Text("Language"))
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
@@ -52,7 +86,7 @@ struct VoiceModelView: View {
                                 voice.voiceModel = model
                             }
                             // Test suara saat dipilih.
-                            voice.speak("Halo, ini suara \(model.title).")
+                            playSample()
                         } label: {
                             ZStack {
                                 Circle()

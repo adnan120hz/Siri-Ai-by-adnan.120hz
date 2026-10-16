@@ -139,35 +139,34 @@ struct SiriOrbFaint: View {
     }
 }
 
-// MARK: - Loading bubble: logo mengembang (breathing) + refleksi di bawah.
+// MARK: - Loading spinner: titik-titik melingkar ala iOS (UIActivityIndicatorView).
 // Muncul saat user sudah kirim pesan dan AI sedang merespons.
 struct SiriLoadingBubble: View {
-    @State private var breathe = false
+    @State private var phase = 0
+    private let dotCount = 12
+    private let timer = Timer.publish(every: 1.0 / 12.0, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        VStack(spacing: 0) {
-            Image("SiriOrb")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 56, height: 56)
-                .clipShape(Circle())
-            // Refleksi: logo dibalik vertikal, memudar ke bawah.
-            Image("SiriOrb")
-                .resizable()
-                .scaledToFill()
-                .frame(width: 56, height: 28)
-                .scaleEffect(x: 1, y: -1)
-                .mask(
-                    LinearGradient(
-                        colors: [.black.opacity(0.3), .clear],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                )
-                .opacity(0.5)
+        ZStack {
+            ForEach(0..<dotCount, id: \.self) { i in
+                Circle()
+                    .fill(Color(.systemGray))
+                    .frame(width: 7, height: 7)
+                    .offset(y: -19)
+                    .rotationEffect(.degrees(Double(i) * 360.0 / Double(dotCount)))
+                    .opacity(opacity(for: i))
+            }
         }
-        .scaleEffect(breathe ? 1.12 : 1.0)
-        .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: breathe)
-        .onAppear { breathe = true }
+        .frame(width: 52, height: 52)
+        .onReceive(timer) { _ in
+            phase = (phase + 1) % dotCount
+        }
         .accessibilityHidden(true)
+    }
+
+    /// Titik terdepan paling terang, ekor memudar — efek putar ala activity indicator.
+    private func opacity(for i: Int) -> Double {
+        let distance = (phase - i + dotCount) % dotCount
+        return 1.0 - (Double(distance) / Double(dotCount)) * 0.85
     }
 }

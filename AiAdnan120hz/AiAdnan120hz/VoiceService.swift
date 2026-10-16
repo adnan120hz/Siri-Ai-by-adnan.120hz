@@ -28,12 +28,46 @@ enum VoiceModel: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Pitch untuk tiap model (1.0 = normal).
+    /// Pitch untuk tiap model (1.0 = normal). Robot pakai pitch ekstrem biar kedengeran robotik.
     var pitch: Float {
         switch self {
-        case .robot: return 0.7   // Rendah, monoton = robotik
-        case .male: return 0.9    // Sedikit rendah = maskulin
-        case .female: return 1.1  // Sedikit tinggi = feminin
+        case .robot: return 0.5   // Sangat rendah + monoton = robotik
+        case .male: return 0.85   // Rendah = maskulin
+        case .female: return 1.15 // Tinggi = feminin
+        }
+    }
+
+    /// Rate multiplier tambahan per model (robot lebih lambat & kaku).
+    var rateMultiplier: Float {
+        switch self {
+        case .robot: return 0.92
+        case .male: return 1.0
+        case .female: return 1.0
+        }
+    }
+}
+
+// MARK: - Voice Language: English / Indonesia
+// Tiap bahasa punya logat & daftar suara sistem yang beda.
+
+enum VoiceLanguage: String, CaseIterable, Identifiable {
+    case english = "en-US"
+    case indonesian = "id-ID"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .english: return "English"
+        case .indonesian: return "Indonesia"
+        }
+    }
+
+    /// Contoh kalimat untuk test suara.
+    var sampleText: String {
+        switch self {
+        case .english: return "Hello, this is my voice."
+        case .indonesian: return "Halo, ini suara saya."
         }
     }
 }
@@ -49,6 +83,11 @@ final class VoiceService: ObservableObject {
     /// Model suara terpilih (robot/cowok/cewek). Tersimpan di UserDefaults.
     @Published var voiceModel: VoiceModel = VoiceModel(rawValue: UserDefaults.standard.string(forKey: "voiceModel") ?? "female") ?? .female {
         didSet { UserDefaults.standard.set(voiceModel.rawValue, forKey: "voiceModel") }
+    }
+
+    /// Bahasa suara (English / Indonesia). Tersimpan di UserDefaults.
+    @Published var voiceLanguage: VoiceLanguage = VoiceLanguage(rawValue: UserDefaults.standard.string(forKey: "voiceLanguage") ?? "id-ID") ?? .indonesian {
+        didSet { UserDefaults.standard.set(voiceLanguage.rawValue, forKey: "voiceLanguage") }
     }
 
     /// Kecepatan bicara (0.5 = lambat, 1.5 = cepat). Diatur via slider.
@@ -266,7 +305,30 @@ final class VoiceService: ObservableObject {
 
     // MARK: - Text-to-speech
 
-    /// Bacakan teks dengan suara sistem (id-ID kalau tersedia).
+    /// Nama suara sistem yang umum dipakai pria (heuristik, karena iOS tidak expose gender).
+    private static let maleVoiceNames = ["alex", "daniel", "fred", "gordon", "rishi", "aaron", "nicky"]
+    /// Nama suara sistem yang umum dipakai wanita.
+    private static let femaleVoiceNames = ["samantha", "victoria", "karen", "moira", "tessa", "veena", "fiona", "damayanti", "sari"]
+
+    /// Cari suara sistem yang paling cocok untuk kombinasi bahasa + model.
+    /// Robot: suara default bahasa itu (efek robotik dari pitch ekstrem).
+    /// Cowok/Cewek: cari nama yang cocok, fallback ke suara pertama + pitch.
+    static func resolveVoice(language: VoiceLanguage, model: VoiceModel) -> AVSpeechSynthesisVoice? {
+        let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == language.rawValue }
+        guard !voices.isEmpty else { return nil }
+        switch model {
+        case .robot:
+            return voices.first
+        case .male:
+            return voices.first { v in maleVoiceNames.contains(where: { v.name.lowercased().contains($0) }) }
+                ?? voices.first
+        case .female:
+            return voices.first { v in femaleVoiceNames.contains(where: { v.name.lowercased().contains($0) }) }
+                ?? voices.first
+        }
+    }
+
+    /// Bacakan teks dengan suara sesuai bahasa + model terpilih.
     func speak(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -282,14 +344,17 @@ final class VoiceService: ObservableObject {
             }
         }
         let utterance = AVSpeechUtterance(string: trimmed)
-        utterance.voice = AVSpeechSynthesisVoice(language: "id-ID")
-            ?? AVSpeechSynthesisVoice(language: "en-US")
         // Baca dari UserDefaults langsung (bisa diubah dari VoiceModelView instance lain).
         let modelRaw = UserDefaults.standard.string(forKey: "voiceModel") ?? "female"
         let model = VoiceModel(rawValue: modelRaw) ?? .female
+        let langRaw = UserDefaults.standard.string(forKey: "voiceLanguage") ?? "id-ID"
+        let language = VoiceLanguage(rawValue: langRaw) ?? .indonesian
+        utterance.voice = Self.resolveVoice(language: language, model: model)
+            ?? AVSpeechSynthesisVoice(language: language.rawValue)
+            ?? AVSpeechSynthesisVoice(language: "en-US")
         let rate = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0
         utterance.pitchMultiplier = model.pitch
-        utterance.rate = rate * AVSpeechUtteranceDefaultSpeechRate
+        utterance.rate = rate * model.rateMultiplier * AVSpeechUtteranceDefaultSpeechRate
         synthesizer.speak(utterance)
     }
 
