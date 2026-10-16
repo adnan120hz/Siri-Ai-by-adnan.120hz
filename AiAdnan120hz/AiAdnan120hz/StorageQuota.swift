@@ -5,6 +5,7 @@ import Foundation
 // canAccommodate(_:). SwiftData menyimpan implisit — di sana enforcement
 // hanya best-effort (lihat komentar di titik save), tidak diklaim total.
 
+@MainActor
 enum StorageQuota {
     /// Cap dinamis mengikuti status premium: 25 GB (free) / 50 GB (premium).
     static var capBytes: Int64 {

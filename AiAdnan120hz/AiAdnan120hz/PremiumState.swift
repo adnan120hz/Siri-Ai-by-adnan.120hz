@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+@MainActor
 final class PremiumState: ObservableObject {
 
     static let shared = PremiumState()

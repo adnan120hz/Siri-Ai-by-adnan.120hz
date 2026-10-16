@@ -98,14 +98,14 @@ final class VoiceService: ObservableObject {
 
     /// Identifier suara sistem terpilih (dari AVSpeechSynthesisVoice.speechVoices()).
     /// Kosong = otomatis (fallback ke model + bahasa). Tersimpan di UserDefaults.
-    @Published var selectedVoiceIdentifier: String = UserDefaults.standard.string(forKey: Self.selectedVoiceKey) ?? "" {
+    @Published var selectedVoiceIdentifier: String = UserDefaults.standard.string(forKey: "siri.tts.voiceIdentifier") ?? "" {
         didSet { UserDefaults.standard.set(selectedVoiceIdentifier, forKey: Self.selectedVoiceKey) }
     }
 
     /// Toggle "Voice reply" — balasan AI dibacakan dengan suara. Default MATI,
     /// user wajib aktifkan manual. Hanya berlaku untuk premium; free selalu
     /// diam (dicek di speakReply). Tersimpan di UserDefaults.
-    @Published var voiceReplyEnabled: Bool = UserDefaults.standard.bool(forKey: Self.voiceReplyKey) {
+    @Published var voiceReplyEnabled: Bool = UserDefaults.standard.bool(forKey: "siri.tts.voiceReplyEnabled") {
         didSet { UserDefaults.standard.set(voiceReplyEnabled, forKey: Self.voiceReplyKey) }
     }
 

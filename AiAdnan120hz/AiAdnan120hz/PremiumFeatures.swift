@@ -14,13 +14,14 @@ import SwiftUI
 
 /// Toggle fitur premium. Tiap toggle hanya efektif bila PremiumState.shared.isPremium.
 /// Semua default MATI — user wajib aktifkan manual setelah redeem.
+@MainActor
 final class PremiumFeatures: ObservableObject {
     static let shared = PremiumFeatures()
 
-    @Published var fileReadingEnabled: Bool = UserDefaults.standard.object(forKey: Self.fileReadingKey) as? Bool ?? false {
+    @Published var fileReadingEnabled: Bool = UserDefaults.standard.object(forKey: "siri.premium.fileReading") as? Bool ?? false {
         didSet { UserDefaults.standard.set(fileReadingEnabled, forKey: Self.fileReadingKey) }
     }
-    @Published var usePremiumKey: Bool = UserDefaults.standard.object(forKey: Self.usePremiumKeyKey) as? Bool ?? false {
+    @Published var usePremiumKey: Bool = UserDefaults.standard.object(forKey: "siri.premium.usePremiumKey") as? Bool ?? false {
         didSet { UserDefaults.standard.set(usePremiumKey, forKey: Self.usePremiumKeyKey) }
     }
 
