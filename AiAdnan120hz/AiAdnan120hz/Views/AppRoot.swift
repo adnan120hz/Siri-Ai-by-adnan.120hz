@@ -79,7 +79,7 @@ struct AppRoot: View {
     private func makeConversation() -> Conversation {
         let c = Conversation(
             title: "New chat",
-            modelId: appState.resolvedModelId(for: appState.activeProvider)
+            modelId: GeminiClient.primaryModel
         )
         context.insert(c)
         try? context.save()

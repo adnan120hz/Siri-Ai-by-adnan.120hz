@@ -1,8 +1,7 @@
 import Foundation
 
-// MARK: - Pelacak kuota token harian (APInex free tier = 10M tokens/day).
-// Reset otomatis tiap ganti hari. Estimasi kasar: 1 token ≈ 4 karakter
-// untuk teks non-streaming; streaming menghitung token asli yang diterima.
+// MARK: - Pelacak pemakaian token harian (estimasi lokal, Gemini).
+// Reset otomatis tiap ganti hari. Estimasi kasar: 1 token ≈ 4 karakter.
 
 enum TokenUsage {
     static let dailyCap = 10_000_000

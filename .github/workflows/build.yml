@@ -12,16 +12,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Generate Secrets.swift
+        env:
+          GEMINI_API_KEY_FREE: ${{ secrets.GEMINI_API_KEY_FREE }}
+          GEMINI_API_KEY_PREMIUM: ${{ secrets.GEMINI_API_KEY_PREMIUM }}
+          REDEEM_SECRET: ${{ secrets.REDEEM_SECRET }}
+        run: python3 scripts/generate_secrets.py --strict
+
       - name: Select Xcode 26
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          # Dikunci ke 26.6 agar konsisten dengan screenshot.yml & konvensi CI
+          # (macos-26 + setup-xcode 26.6). 'latest-stable' berisiko narik
+          # Xcode major baru secara diam-diam dan memecahkan build.
+          xcode-version: '26.6'
 
       - name: Xcode version
         run: xcodebuild -version
 
       - name: Archive (unsigned)
         run: |
+          # pipefail WAJIB: tanpa ini xcodebuild yang gagal (piped ke tee)
+          # akan dilaporkan sukses karena exit code diambil dari tee.
+          set -o pipefail
           xcodebuild \
             -project AiAdnan120hz/AiAdnan120hz.xcodeproj \
             -scheme AiAdnan120hz \

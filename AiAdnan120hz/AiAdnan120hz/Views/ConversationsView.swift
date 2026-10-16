@@ -30,6 +30,9 @@ struct ConversationsView: View {
     @State private var renameTarget: Conversation?
     @State private var renameText = ""
     @State private var showVoiceModel = false
+    @State private var showSubscriptions = false
+    /// Lingkaran premium: kiri atas normal, pindah kanan atas bila ON.
+    @AppStorage("siri.premium.hideCircle") private var hidePremiumCircle = false
 
     private var filtered: [Conversation] {
         guard !searchText.isEmpty else { return conversations }
@@ -52,8 +55,13 @@ struct ConversationsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Top bar: hamburger kanan (berisi Grid / List / Select / Settings).
-            // Sembunyi saat search aktif; muncul lagi kalau search ditutup.
+            // Lingkaran premium di kiri atas; pindah kanan atas bila
+            // "Hide subscriptions" ON. Sembunyi saat search aktif; muncul
+            // lagi kalau search ditutup.
             HStack {
+                if !hidePremiumCircle && !showSearch {
+                    premiumCircleButton
+                }
                 Spacer()
 
                 if mode == .select {
@@ -89,6 +97,9 @@ struct ConversationsView: View {
                     }
                     .tint(.primary)
                     .accessibilityLabel(Text("View options"))
+                }
+                if hidePremiumCircle && !showSearch {
+                    premiumCircleButton
                 }
             }
             .padding(.horizontal, SiriTheme.m)
@@ -249,6 +260,7 @@ struct ConversationsView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(isPresented: $showVoiceModel) { VoiceModelView() }
+        .sheet(isPresented: $showSubscriptions) { SubscriptionsView() }
         .overlay(deleteAlertOverlay)
         .alert("Rename", isPresented: Binding(
             get: { renameTarget != nil },
@@ -483,6 +495,14 @@ struct ConversationsView: View {
     }
 
     // MARK: - Helpers.
+
+    /// Lingkaran premium (crown) — buka SubscriptionsView.
+    private var premiumCircleButton: some View {
+        SiriCircleButton(systemImage: "crown.fill", imageSize: 20) {
+            showSubscriptions = true
+        }
+        .accessibilityLabel(Text("Subscriptions"))
+    }
 
     private func toggleSelect(_ convo: Conversation) {
         withAnimation(SiriTheme.liquid) {

@@ -122,21 +122,13 @@ final class WebSource {
 
 @MainActor
 final class AppState: ObservableObject {
-    @Published var hasAPIKey: Bool = false
-    @Published var keyMasked: String = ""
-    @Published var availableModels: [String] = []
-    @Published var modelsError: String?
-
-    /// Provider aktif: "apinex". Key disimpan di Keychain.
-    @Published var activeProvider: AIProvider = AIProvider(rawValue: UserDefaults.standard.string(forKey: "aiProvider") ?? "apinex") ?? .apinex {
-        didSet { UserDefaults.standard.set(activeProvider.rawValue, forKey: "aiProvider") }
-    }
+    /// Key TANAM via Secrets (di-generate CI dari GitHub Secrets) — tidak ada
+    /// lagi input key manual / provider. hasAPIKey = false hanya kalau key
+    /// gagal tertanam (CI misconfig).
+    @Published var hasAPIKey: Bool = !Secrets.geminiFreeKey.isEmpty
 
     // @AppStorage tidak memicu objectWillChange di dalam ObservableObject
     // (UI tidak refresh) → pakai @Published + tulis UserDefaults manual.
-    @Published var defaultModelId: String = UserDefaults.standard.string(forKey: "defaultModelId") ?? "" {
-        didSet { UserDefaults.standard.set(defaultModelId, forKey: "defaultModelId") }
-    }
     @Published var memoryEnabled: Bool = UserDefaults.standard.object(forKey: "memoryEnabled") as? Bool ?? true {
         didSet { UserDefaults.standard.set(memoryEnabled, forKey: "memoryEnabled") }
     }
@@ -153,57 +145,8 @@ final class AppState: ObservableObject {
         refreshKeyStatus()
     }
 
-    /// Key aktif = key milik provider aktif. Kalau provider aktif belum punya key
-    /// tapi provider lain punya, otomatis pindah ke yang punya key.
-    var activeKey: String? {
-        KeychainStore.load(for: activeProvider)
-    }
-
+    /// Key tertanam = selalu ada (kecuali CI misconfig).
     func refreshKeyStatus() {
-        if let key = KeychainStore.load(for: activeProvider), !key.isEmpty {
-            hasAPIKey = true
-            keyMasked = KeychainStore.masked(key)
-            return
-        }
-        // Fallback: pakai provider lain yang punya key.
-        for p in AIProvider.allCases where p != activeProvider {
-            if let key = KeychainStore.load(for: p), !key.isEmpty {
-                activeProvider = p
-                hasAPIKey = true
-                keyMasked = KeychainStore.masked(key)
-                return
-            }
-        }
-        hasAPIKey = false
-        keyMasked = ""
-    }
-
-    /// Model yang aman dipakai untuk provider: validasi sebelum kirim chat.
-    /// Aturan: kosong/tidak diizinkan → default. Ada di daftar server tapi tidak
-    /// dikenal → default. Ini mencegah HTTP 404 karena model basi (mis. NVIDIA
-    /// me-list model yang tidak ter-deploy di akun user).
-    func resolvedModelId(for provider: AIProvider) -> String {
-        let stored = defaultModelId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !stored.isEmpty, provider.allowsModel(stored) else {
-            return provider.defaultModel
-        }
-        // Kalau ada daftar dari server dan stored tidak ada di dalamnya
-        // (dan bukan default) → reset ke default.
-        if !availableModels.isEmpty, !availableModels.contains(stored), stored != provider.defaultModel {
-            return provider.defaultModel
-        }
-        return stored
-    }
-
-    func hasKey(for provider: AIProvider) -> Bool {
-        if let k = KeychainStore.load(for: provider), !k.isEmpty { return true }
-        return false
-    }
-
-    func maskedKey(for provider: AIProvider) -> String {
-        if let k = KeychainStore.load(for: provider), !k.isEmpty {
-            return KeychainStore.masked(k)
-        }
-        return ""
+        hasAPIKey = !Secrets.geminiFreeKey.isEmpty
     }
 }

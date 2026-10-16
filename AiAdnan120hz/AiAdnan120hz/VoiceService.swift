@@ -76,6 +76,10 @@ enum VoiceLanguage: String, CaseIterable, Identifiable {
 
 @MainActor
 final class VoiceService: ObservableObject {
+    /// Instance bersama — toggle (mis. voiceReplyEnabled) yang diubah di satu
+    /// view langsung terlihat di view lain. Semua state tetap persist ke UserDefaults.
+    static let shared = VoiceService()
+
     private enum Phase { case idle, preparing, recording, transcribing }
 
     @Published var isRecording = false
@@ -92,6 +96,19 @@ final class VoiceService: ObservableObject {
         didSet { UserDefaults.standard.set(voiceLanguage.rawValue, forKey: "voiceLanguage") }
     }
 
+    /// Identifier suara sistem terpilih (dari AVSpeechSynthesisVoice.speechVoices()).
+    /// Kosong = otomatis (fallback ke model + bahasa). Tersimpan di UserDefaults.
+    @Published var selectedVoiceIdentifier: String = UserDefaults.standard.string(forKey: "siri.tts.voiceIdentifier") ?? "" {
+        didSet { UserDefaults.standard.set(selectedVoiceIdentifier, forKey: Self.selectedVoiceKey) }
+    }
+
+    /// Toggle "Voice reply" — balasan AI dibacakan dengan suara. Default MATI,
+    /// user wajib aktifkan manual. Hanya berlaku untuk premium; free selalu
+    /// diam (dicek di speakReply). Tersimpan di UserDefaults.
+    @Published var voiceReplyEnabled: Bool = UserDefaults.standard.bool(forKey: "siri.tts.voiceReplyEnabled") {
+        didSet { UserDefaults.standard.set(voiceReplyEnabled, forKey: Self.voiceReplyKey) }
+    }
+
     /// Kecepatan bicara (0.5 = lambat, 1.5 = cepat). Diatur via slider.
     @Published var speechRate: Float = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0 {
         didSet { UserDefaults.standard.set(speechRate, forKey: "speechRate") }
@@ -106,6 +123,9 @@ final class VoiceService: ObservableObject {
     private var phase: Phase = .idle
     /// Token untuk membatalkan persiapan yang masih in-flight (mis. dialog izin kebuka lalu user tap stop).
     private var preparingToken = UUID()
+
+    private static let selectedVoiceKey = "siri.tts.voiceIdentifier"
+    private static let voiceReplyKey = "siri.tts.voiceReplyEnabled"
 
     private var recognizer: SFSpeechRecognizer?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -198,6 +218,16 @@ final class VoiceService: ObservableObject {
             return
         }
         print("[SiriAi] Voice: recognizer ready")
+
+        // Guard 2b: storage quota — blokir rekaman kalau cap sudah tercapai.
+        // Ukuran rekaman belum diketahui sebelumnya (jujur), jadi ini hanya
+        // menolak saat usedBytes sudah ≥ cap dinamis (25 GB free / 50 GB premium).
+        guard StorageQuota.canAccommodate(0) else {
+            print("[SiriAi] Voice: blocked — storage quota tercapai")
+            permissionError = StorageQuota.fullMessage
+            phase = .idle
+            return
+        }
 
         // Guard 3: audio session.
         do {
@@ -311,7 +341,56 @@ final class VoiceService: ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    // MARK: - Text-to-speech
+    // MARK: - Text-to-speech (daftar suara REAL dari sistem)
+
+    /// Semua suara sistem — enumerasi real, tidak ada hardcode.
+    var allSystemVoices: [AVSpeechSynthesisVoice] {
+        AVSpeechSynthesisVoice.speechVoices()
+    }
+
+    /// Suara yang dipilih user di VoiceModelView, nil kalau belum milih / identifier hilang.
+    var selectedVoice: AVSpeechSynthesisVoice? {
+        guard !selectedVoiceIdentifier.isEmpty else { return nil }
+        return allSystemVoices.first { $0.identifier == selectedVoiceIdentifier }
+    }
+
+    /// Siapkan audio session untuk playback (suara keluar walau silent switch nyala).
+    /// Di-skip saat lagi merekam supaya recorder tidak keganggu.
+    private func preparePlaybackSession() {
+        guard phase != .recording else { return }
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: .duckOthers)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            // Tetap coba speak tanpa session khusus.
+        }
+    }
+
+    /// Preview satu suara sistem: stop preview sebelumnya dulu, lalu ucapkan
+    /// kalimat contoh pendek dengan suara itu. Rate & expressivity ikut setting user.
+    func previewVoice(_ v: AVSpeechSynthesisVoice) {
+        stopSpeaking()
+        let sample = v.language.hasPrefix("id") ? "Halo, ini suara saya." : "Hello, this is my voice."
+        preparePlaybackSession()
+        let utterance = AVSpeechUtterance(string: sample)
+        utterance.voice = v
+        let expressivity = UserDefaults.standard.object(forKey: "expressivity") as? Float ?? 0.5
+        let offset = (expressivity - 0.5) * 0.6
+        utterance.pitchMultiplier = min(2.0, max(0.5, 1.0 + offset))
+        let rate = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0
+        utterance.rate = rate * AVSpeechUtteranceDefaultSpeechRate
+        synthesizer.speak(utterance)
+    }
+
+    /// Balasan AI dengan voice-reply gating (disengaja oleh user):
+    /// - Free  → selalu diam (teks saja), apa pun toggle-nya.
+    /// - Premium tapi toggle "Voice reply" MATI → diam.
+    /// - Premium + toggle ON → dibacakan dengan speak().
+    func speakReply(_ text: String) {
+        guard PremiumState.shared.isPremium else { return }
+        guard voiceReplyEnabled else { return }
+        speak(text)
+    }
 
     /// Nama suara sistem yang umum dipakai pria (heuristik, karena iOS tidak expose gender).
     private static let maleVoiceNames = ["alex", "daniel", "fred", "gordon", "rishi", "aaron", "nicky"]
@@ -341,16 +420,7 @@ final class VoiceService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         stopSpeaking()
-        // Jangan utak-atik audio session saat lagi merekam — recorder bisa keganggu.
-        if phase != .recording {
-            do {
-                // Pakai playback agar suara keluar walau silent switch nyala.
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: .duckOthers)
-                try AVAudioSession.sharedInstance().setActive(true)
-            } catch {
-                // Tetap coba speak tanpa session khusus.
-            }
-        }
+        preparePlaybackSession()
         let utterance = AVSpeechUtterance(string: trimmed)
         // Baca dari UserDefaults langsung (bisa diubah dari VoiceModelView instance lain).
         let modelRaw = UserDefaults.standard.string(forKey: "voiceModel") ?? "female"
@@ -361,7 +431,8 @@ final class VoiceService: ObservableObject {
         if language == .indonesian && model == .male {
             model = .female
         }
-        utterance.voice = Self.resolveVoice(language: language, model: model)
+        utterance.voice = selectedVoice
+            ?? Self.resolveVoice(language: language, model: model)
             ?? AVSpeechSynthesisVoice(language: language.rawValue)
             ?? AVSpeechSynthesisVoice(language: "en-US")
         let rate = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0
