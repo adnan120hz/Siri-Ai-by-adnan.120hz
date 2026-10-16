@@ -1,7 +1,7 @@
 import SwiftUI
 
 
-// MARK: - Content gate: API key required before chatting.
+// MARK: - Content gate: AI key tertanam (Secrets) sebelum chatting.
 
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
@@ -27,14 +27,14 @@ struct ContentView: View {
             Text("Siri Ai")
                 .font(.title)
                 .bold()
-            Text("Add an API key to start chatting.\nYour key stays on this phone.")
+            Text("AI key belum tertanam di build ini.\nRebuild dari CI dengan GitHub Secrets yang benar.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             Button {
                 showSettings = true
             } label: {
-                Text("Set up API Key")
+                Text("Open Settings")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .padding(.horizontal, SiriTheme.xl)

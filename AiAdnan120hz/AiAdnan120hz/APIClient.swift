@@ -1,442 +1,238 @@
 import Foundation
 
-// MARK: - AIClient (OpenAI-compatible) — semua lewat URLSession, tanpa fake.
-// Mendukung provider APInex. Provider dipilih user di Settings.
+// MARK: - Gemini client (Google AI Studio / Generative Language API).
+// Key TANAM saat CI (enum Secrets, di-generate dari GitHub Secrets) —
+// TIDAK PERNAH di-hardcode, tidak pernah di-log, tidak pernah via query string.
+// Key hanya dikirim lewat header `x-goog-api-key` (format key baru "AQ."
+// kena 401 palsu kalau lewat ?key=).
 
-enum APIError: LocalizedError {
-    case noKey
-    case http(status: Int, body: String)
-    case network(URLError)
-    case decoding(String)
-    case emptyReply
+enum GeminiError: LocalizedError {
+    /// 401/403: key salah / tidak diizinkan. STOP — jangan retry.
+    case unauthorized
+    /// 429: kuota habis. Sinyal khusus ke UI, jangan retry otomatis.
+    case quotaExceeded
+    /// 404: model tidak ada. Pemanggil boleh coba model fallback.
+    case modelNotFound
+    /// Error jaringan transient. Transport sudah retry 1x; ini hasil akhirnya.
+    case network(Error)
+    /// Respons tak bisa dibaca / status lain.
+    case invalidResponse(String)
 
     var errorDescription: String? {
         switch self {
-        case .noKey:
-            return "API key belum dipasang. Buka Pengaturan → API Key."
-        case .http(let status, let body):
-            let short = body.count > 600 ? String(body.prefix(600)) + "…" : body
-            return "HTTP \(status)\n\(short)"
+        case .unauthorized:
+            return "API key ditolak (401/403). Cek key di GitHub Secrets lalu rebuild."
+        case .quotaExceeded:
+            return "Kuota Gemini habis (429). Coba lagi nanti."
+        case .modelNotFound:
+            return "Model tidak tersedia (404)."
         case .network(let e):
             return "Jaringan: \(e.localizedDescription)"
-        case .decoding(let s):
-            return "Gagal baca respons: \(s)"
-        case .emptyReply:
-            return "Respons kosong dari server."
+        case .invalidResponse(let s):
+            let short = s.count > 600 ? String(s.prefix(600)) + "…" : s
+            return "Respons tak valid.\n\(short)"
         }
     }
 }
 
-// MARK: - Model payload
+// MARK: - Client
 
-struct AIClient {
+enum GeminiClient {
     /// User-Agent browser-like: beberapa gateway/WAF menolak request tanpa UA.
+    /// Dipakai juga oleh GitHubClient.
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
-    // --- /models ---
+    /// Model utama dan fallback. JANGAN pakai alias `gemini-flash-latest`.
+    static let primaryModel = "gemini-2.5-flash"
+    static let fallbackModel = "gemini-2.0-flash"
 
-    struct ModelItem: Decodable { var id: String }
-    struct ModelList: Decodable { var data: [ModelItem]? }
+    private static let endpoint = "https://generativelanguage.googleapis.com/v1beta/models"
 
-    static func fetchModels(apiKey: String, provider: AIProvider) async throws -> [String] {
-        var req = URLRequest(url: provider.baseURL.appendingPathComponent("models"))
-        req.httpMethod = "GET"
-        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        req.timeoutInterval = 20
-        let (data, response): (Data, URLResponse)
-        do {
-            (data, response) = try await URLSession.shared.data(for: req)
-        } catch let e as URLError {
-            throw APIError.network(e)
+    // MARK: - Payload
+
+    private struct Part: Encodable {
+        var text: String?
+        var inlineData: InlineData?
+
+        struct InlineData: Encodable {
+            var mimeType: String
+            var data: String // base64 murni, tanpa prefix data:
         }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-        guard status == 200 else {
-            throw APIError.http(status: status, body: String(data: data, encoding: .utf8) ?? "")
-        }
-        do {
-            let list = try JSONDecoder().decode(ModelList.self, from: data)
-            return (list.data ?? []).map(\.id).sorted()
-        } catch {
-            throw APIError.decoding(error.localizedDescription)
+
+        enum CodingKeys: String, CodingKey { case text, inlineData }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encodeIfPresent(text, forKey: .text)
+            try c.encodeIfPresent(inlineData, forKey: .inlineData)
         }
     }
 
-    // --- /chat/completions ---
+    private struct Content: Encodable {
+        var role: String // "user" | "model"
+        var parts: [Part]
+    }
 
-    struct Request: Encodable {
-        var model: String
-        var messages: [APIMessage]
-        var max_tokens: Int
-        var temperature: Double
-        var stream: Bool?
-        var tools: [ToolDef]?
+    private struct SystemInstruction: Encodable {
+        var parts: [Part]
+    }
+
+    private struct GenerationConfig: Encodable {
+        var maxOutputTokens: Int = 2048
+        var temperature: Double = 0.7
+    }
+
+    private struct GenerateRequest: Encodable {
+        var contents: [Content]
+        var systemInstruction: SystemInstruction?
+        var generationConfig = GenerationConfig()
 
         enum CodingKeys: String, CodingKey {
-            case model, messages, max_tokens, temperature, stream, tools
-        }
-
-        func encode(to encoder: Encoder) throws {
-            var c = encoder.container(keyedBy: CodingKeys.self)
-            try c.encode(model, forKey: .model)
-            try c.encode(messages, forKey: .messages)
-            try c.encode(max_tokens, forKey: .max_tokens)
-            try c.encode(temperature, forKey: .temperature)
-            try c.encodeIfPresent(stream, forKey: .stream)
-            try c.encodeIfPresent(tools, forKey: .tools)
+            case contents, systemInstruction, generationConfig
         }
     }
 
-    // MARK: - Function calling (tools)
-
-    struct PropSchema: Encodable {
-        var type: String
-        var description: String
-    }
-
-    struct ParamSchema: Encodable {
-        var type: String = "object"
-        var properties: [String: PropSchema]
-        var required: [String]
-    }
-
-    struct FunctionDef: Encodable {
-        var name: String
-        var description: String
-        var parameters: ParamSchema
-    }
-
-    struct ToolDef: Encodable {
-        var type: String = "function"
-        var function: FunctionDef
-    }
-
-    struct ToolCall: Decodable {
-        var id: String
-        struct Fn: Decodable { var name: String; var arguments: String }
-        var function: Fn
-    }
-
-    /// Daftar tools GitHub untuk AI agent. Dikirim hanya kalau token GitHub terhubung.
-    static let githubTools: [ToolDef] = [
-        ToolDef(function: FunctionDef(
-            name: "github_list_repos",
-            description: "Daftar semua repository GitHub milik user yang terhubung. Pakai ini kalau user tanya soal repo GitHub-nya, mis. 'bisa konek github?', 'list repo ku', 'repo apa aja yang aku punya'.",
-            parameters: ParamSchema(properties: [:], required: [])
-        )),
-        ToolDef(function: FunctionDef(
-            name: "github_list_files",
-            description: "Daftar file dalam sebuah repository. Parameter repo format 'owner/nama' (mis. 'adnan120hz/WorkSlop-Desktop-Version'). path_prefix opsional untuk filter folder.",
-            parameters: ParamSchema(
-                properties: [
-                    "repo": PropSchema(type: "string", description: "Nama repo format 'owner/nama'"),
-                    "path_prefix": PropSchema(type: "string", description: "Opsional: filter path, mis. 'src/'"),
-                ],
-                required: ["repo"]
-            )
-        )),
-        ToolDef(function: FunctionDef(
-            name: "github_read_file",
-            description: "Baca isi sebuah file teks dari repository. Parameter repo format 'owner/nama', path adalah path file dalam repo.",
-            parameters: ParamSchema(
-                properties: [
-                    "repo": PropSchema(type: "string", description: "Nama repo format 'owner/nama'"),
-                    "path": PropSchema(type: "string", description: "Path file dalam repo, mis. 'README.md'"),
-                ],
-                required: ["repo", "path"]
-            )
-        )),
-        ToolDef(function: FunctionDef(
-            name: "github_write_file",
-            description: "Buat file baru atau ubah isi file di repository, langsung auto-commit via GitHub Contents API (sama seperti edit di github.com). PENTING: JANGAN panggil tool ini tanpa persetujuan eksplisit user — tanya dulu di chat: sebutkan file yang akan diubah dan pesan commitnya, tunggu user bilang ya/setuju.",
-            parameters: ParamSchema(
-                properties: [
-                    "repo": PropSchema(type: "string", description: "Nama repo format 'owner/nama'"),
-                    "path": PropSchema(type: "string", description: "Path file dalam repo, mis. 'README.md' atau 'src/App.swift'"),
-                    "content": PropSchema(type: "string", description: "Isi LENGKAP file (teks). Untuk edit, baca dulu file-nya lalu kirim versi lengkap yang sudah diubah."),
-                    "message": PropSchema(type: "string", description: "Pesan commit, mis. 'Update README'"),
-                ],
-                required: ["repo", "path", "content"]
-            )
-        )),
-        ToolDef(function: FunctionDef(
-            name: "github_delete_file",
-            description: "Hapus file dari repository, langsung auto-commit via GitHub Contents API. PENTING: JANGAN panggil tool ini tanpa persetujuan eksplisit user — tanya dulu di chat dan tunggu user bilang ya/setuju.",
-            parameters: ParamSchema(
-                properties: [
-                    "repo": PropSchema(type: "string", description: "Nama repo format 'owner/nama'"),
-                    "path": PropSchema(type: "string", description: "Path file dalam repo yang akan dihapus"),
-                    "message": PropSchema(type: "string", description: "Pesan commit, mis. 'Hapus file lama'"),
-                ],
-                required: ["repo", "path"]
-            )
-        )),
-    ]
-
-    struct APIMessage: Encodable {
-        var role: String
-        var content: MessageContent
-        /// Untuk pesan asisten dalam tool loop (OpenAI: tool_calls).
-        var toolCalls: [ToolCallOut]? = nil
-        /// Untuk pesan hasil tool (OpenAI: tool_call_id, role "tool").
-        var toolCallId: String? = nil
-
-        struct ToolCallOut: Encodable {
-            var id: String
-            var type: String = "function"
-            var function: FunctionOut
-            struct FunctionOut: Encodable {
-                var name: String
-                var arguments: String
+    private struct GenerateResponse: Decodable {
+        struct Candidate: Decodable {
+            struct Content: Decodable {
+                struct Part: Decodable { var text: String? }
+                var parts: [Part]?
             }
+            var content: Content?
         }
-
-        enum CodingKeys: String, CodingKey {
-            case role, content
-            case toolCalls = "tool_calls"
-            case toolCallId = "tool_call_id"
-        }
-
-        func encode(to encoder: Encoder) throws {
-            var c = encoder.container(keyedBy: CodingKeys.self)
-            try c.encode(role, forKey: .role)
-            try c.encode(content, forKey: .content)
-            try c.encodeIfPresent(toolCalls, forKey: .toolCalls)
-            try c.encodeIfPresent(toolCallId, forKey: .toolCallId)
-        }
-
-        /// Teks kasar untuk estimasi token (tidak dikirim ke server).
-        var debugText: String {
-            switch content {
-            case .text(let t): return t
-            case .parts(let ps):
-                return ps.map {
-                    switch $0 {
-                    case .text(let t): return t
-                    case .image: return "[gambar]"
-                    }
-                }.joined(separator: " ")
-            }
-        }
-    }
-
-    enum MessageContent: Encodable {
-        case text(String)
-        case parts([ContentPart])
-
-        func encode(to encoder: Encoder) throws {
-            var c = encoder.singleValueContainer()
-            switch self {
-            case .text(let t): try c.encode(t)
-            case .parts(let p): try c.encode(p)
-            }
-        }
-    }
-
-    enum ContentPart: Encodable {
-        case text(String)
-        case image(dataURL: String)
-
-        enum CodingKeys: String, CodingKey { case type, text, image_url }
-
-        func encode(to encoder: Encoder) throws {
-            var c = encoder.container(keyedBy: CodingKeys.self)
-            switch self {
-            case .text(let t):
-                try c.encode("text", forKey: .type)
-                try c.encode(t, forKey: .text)
-            case .image(let url):
-                try c.encode("image_url", forKey: .type)
-                try c.encode(["url": url], forKey: .image_url)
-            }
-        }
-    }
-
-    struct Response: Decodable {
-        struct Choice: Decodable {
-            struct Message: Decodable {
-                var content: String?
-                /// Model reasoning: content null, teks di reasoning_content.
-                var reasoning_content: String?
-                var tool_calls: [ToolCall]?
-                /// Teks jawaban final: content dulu, fallback ke reasoning_content.
-                var effectiveText: String? {
-                    if let c = content, !c.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        return c
-                    }
-                    if let r = reasoning_content, !r.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        return r
-                    }
-                    return nil
-                }
-            }
-            var message: Message
-            var finish_reason: String?
-        }
-        var choices: [Choice]
-    }
-
-    struct StreamChunk: Decodable {
-        struct Choice: Decodable {
-            struct Delta: Decodable {
-                var content: String?
-                var reasoning_content: String?
-            }
-            var delta: Delta
-        }
-        var choices: [Choice]
-    }
-
-    struct ErrorEnvelope: Decodable {
-        struct Detail: Decodable {
+        struct ApiError: Decodable {
+            var code: Int?
+            var status: String?
             var message: String?
-            var type: String?
-            var code: String?
         }
-        var error: Detail?
+        var candidates: [Candidate]?
+        var error: ApiError?
     }
 
-    // MARK: - Daftar model yang boleh dipakai (aturan per provider)
+    // MARK: - Public API
 
-    /// Daftar fallback kalau /models kosong/gagal — hanya 3 model free pilihan user.
-    static let freeModelFallback: [String] = [
-        "free/glm-5.3-flash",
-        "glm-5.3-flash",
-        "free/deepseek-v4.1-flash",
-    ]
-
-    /// Ambil daftar model dari server, saring sesuai aturan provider.
-    /// Kalau hasil saringan kosong → pakai fallback provider.
-    static func fetchAllowedModels(apiKey: String, provider: AIProvider) async throws -> [String] {
-        let all = try await fetchModels(apiKey: apiKey, provider: provider)
-        let allowed = all.filter { provider.allowsModel($0) }
-        return allowed.isEmpty ? provider.modelFallback : allowed
+    /// Kirim prompt teks. `usePremiumKey=false` → Secrets.geminiFreeKey,
+    /// `true` → Secrets.geminiPremiumKey. Mengembalikan teks jawaban polos.
+    /// `history`: riwayat [(role, text)] — role "user"/"assistant"/"model".
+    /// Model utama dicoba dulu; kalau 404 → coba model fallback sekali.
+    static func sendText(_ prompt: String,
+                         history: [(role: String, text: String)] = [],
+                         systemInstruction: String? = nil,
+                         usePremiumKey: Bool = false) async throws -> String {
+        let key = pickKey(usePremiumKey: usePremiumKey)
+        guard !key.isEmpty else { throw GeminiError.unauthorized }
+        let sys = systemInstruction.map { SystemInstruction(parts: [Part(text: $0, inlineData: nil)]) }
+        var contents = history.map { Content(role: geminiRole($0.role), parts: [Part(text: $0.text, inlineData: nil)]) }
+        contents.append(Content(role: "user", parts: [Part(text: prompt, inlineData: nil)]))
+        do {
+            return try await requestOnce(key: key, model: primaryModel, contents: contents, systemInstruction: sys)
+        } catch GeminiError.modelNotFound {
+            // 404 → fallback model sekali, lalu selesai (sukses atau error final).
+            return try await requestOnce(key: key, model: fallbackModel, contents: contents, systemInstruction: sys)
+        }
     }
 
-    private static func makeRequest(apiKey: String, provider: AIProvider, model: String,
-                                   messages: [APIMessage], stream: Bool,
-                                   tools: [ToolDef]? = nil) -> URLRequest {
-        var req = URLRequest(url: provider.baseURL.appendingPathComponent("chat/completions"))
+    /// Kirim prompt + gambar (JPEG/PNG bytes). `images`: (data, mimeType),
+    /// mis. (jpegData, "image/jpeg"). Base64 di-encode di sini — panggil
+    /// dengan bytes murni, tanpa prefix `data:`.
+    static func sendWithImages(_ prompt: String,
+                               images: [(data: Data, mimeType: String)],
+                               history: [(role: String, text: String)] = [],
+                               systemInstruction: String? = nil,
+                               usePremiumKey: Bool = false) async throws -> String {
+        let key = pickKey(usePremiumKey: usePremiumKey)
+        guard !key.isEmpty else { throw GeminiError.unauthorized }
+        let sys = systemInstruction.map { SystemInstruction(parts: [Part(text: $0, inlineData: nil)]) }
+        var contents = history.map { Content(role: geminiRole($0.role), parts: [Part(text: $0.text, inlineData: nil)]) }
+        var parts: [Part] = [Part(text: prompt.isEmpty ? "Jelaskan gambar ini." : prompt, inlineData: nil)]
+        for img in images {
+            parts.append(Part(text: nil, inlineData: Part.InlineData(
+                mimeType: img.mimeType,
+                data: img.data.base64EncodedString())))
+        }
+        contents.append(Content(role: "user", parts: parts))
+        do {
+            return try await requestOnce(key: key, model: primaryModel, contents: contents, systemInstruction: sys)
+        } catch GeminiError.modelNotFound {
+            return try await requestOnce(key: key, model: fallbackModel, contents: contents, systemInstruction: sys)
+        }
+    }
+
+    /// Gemini hanya kenal role "user"/"model". Petakan "assistant" → "model".
+    private static func geminiRole(_ role: String) -> String {
+        role == "assistant" ? "model" : role
+    }
+
+    // MARK: - Internal
+
+    /// Pilih key TANAM. TIDAK ADA validasi format/panjang — cukup cek kosong.
+    private static func pickKey(usePremiumKey: Bool) -> String {
+        usePremiumKey ? Secrets.geminiPremiumKey : Secrets.geminiFreeKey
+    }
+
+    /// Satu request HTTP. Retry 1x HANYA untuk network error transient.
+    /// 401/403/429/404 TIDAK di-retry — langsung jadi GeminiError bertipe.
+    private static func requestOnce(key: String, model: String,
+                                    contents: [Content],
+                                    systemInstruction: SystemInstruction?) async throws -> String {
+        let url = URL(string: "\(endpoint)/\(model):generateContent")!
+        var req = URLRequest(url: url)
         req.httpMethod = "POST"
-        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        req.setValue(key, forHTTPHeaderField: "x-goog-api-key")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        // Streaming: token pertama harus cepat, tapi jawaban panjang butuh waktu → 180.
-        // Non-streaming: fail fast → 60. Tool loop: tiap putaran bisa panggil API → 90.
-        req.timeoutInterval = stream ? 180 : (tools == nil ? 60 : 90)
-        let body = Request(model: model, messages: messages,
-                           max_tokens: 2048, temperature: 0.7,
-                           stream: stream ? true : nil, tools: tools)
-        req.httpBody = try? JSONEncoder().encode(body)
-        return req
-    }
+        req.timeoutInterval = 60
+        let body = GenerateRequest(contents: contents, systemInstruction: systemInstruction)
+        req.httpBody = try JSONEncoder().encode(body)
 
-    /// Non-streaming. Selalu mengembalikan body error asli saat HTTP != 200.
-    static func sendChat(apiKey: String, provider: AIProvider, model: String,
-                         messages: [APIMessage]) async throws -> String {
-        let req = makeRequest(apiKey: apiKey, provider: provider, model: model, messages: messages, stream: false)
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await URLSession.shared.data(for: req)
-        } catch let e as URLError {
-            throw APIError.network(e)
-        }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-        guard status == 200 else {
-            throw APIError.http(status: status, body: String(data: data, encoding: .utf8) ?? "")
-        }
-        do {
-            let decoded = try JSONDecoder().decode(Response.self, from: data)
-            guard let text = decoded.choices.first?.message.effectiveText, !text.isEmpty else {
-                throw APIError.emptyReply
-            }
-            return text
-        } catch let e as APIError {
-            throw e
         } catch {
-            throw APIError.decoding(error.localizedDescription)
-        }
-    }
-
-    /// Model menolak function calling (banyak model free kecil tidak support tools).
-    struct ToolsNotSupported: Error {}
-
-    /// Non-streaming dengan tools. Mengembalikan (teks jawaban, tool calls).
-    /// Melempar `ToolsNotSupported` kalau server/gateway menolak parameter tools.
-    static func sendChatWithTools(apiKey: String, provider: AIProvider, model: String,
-                                  messages: [APIMessage],
-                                  tools: [ToolDef]) async throws -> (String?, [ToolCall]?) {
-        let req = makeRequest(apiKey: apiKey, provider: provider, model: model, messages: messages,
-                              stream: false, tools: tools)
-        let (data, response): (Data, URLResponse)
-        do {
-            (data, response) = try await URLSession.shared.data(for: req)
-        } catch let e as URLError {
-            throw APIError.network(e)
+            // Retry sekali untuk network error, lalu serahkan sebagai .network.
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            do {
+                (data, response) = try await URLSession.shared.data(for: req)
+            } catch {
+                throw GeminiError.network(error)
+            }
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-        guard status == 200 else {
+        switch status {
+        case 200:
+            break
+        case 401, 403:
+            throw GeminiError.unauthorized
+        case 404:
+            throw GeminiError.modelNotFound
+        case 429:
+            throw GeminiError.quotaExceeded
+        default:
             let body = String(data: data, encoding: .utf8) ?? ""
-            let low = body.lowercased()
-            if low.contains("tool") || low.contains("function") {
-                throw ToolsNotSupported()
-            }
-            throw APIError.http(status: status, body: body)
+            throw GeminiError.invalidResponse("HTTP \(status)\n\(body)")
         }
+
         do {
-            let decoded = try JSONDecoder().decode(Response.self, from: data)
-            guard let choice = decoded.choices.first else { throw APIError.emptyReply }
-            return (choice.message.effectiveText, choice.message.tool_calls)
-        } catch let e as APIError {
-            throw e
-        } catch {
-            throw APIError.decoding(error.localizedDescription)
-        }
-    }
-
-    /// Streaming SSE sebagai AsyncThrowingStream.
-    /// Melempar `StreamSetupFailed` kalau server menolak, supaya pemanggil
-    /// bisa fallback ke non-streaming (yang memberi body error lengkap).
-    struct StreamSetupFailed: Error { var status: Int }
-
-    static func streamChat(apiKey: String, provider: AIProvider, model: String,
-                           messages: [APIMessage]) -> AsyncThrowingStream<String, Error> {
-        let req = makeRequest(apiKey: apiKey, provider: provider, model: model, messages: messages, stream: true)
-        return AsyncThrowingStream { continuation in
-            Task {
-                do {
-                    let (bytes, response) = try await URLSession.shared.bytes(for: req)
-                    let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-                    guard status == 200 else {
-                        continuation.finish(throwing: StreamSetupFailed(status: status))
-                        return
-                    }
-                    var gotAnything = false
-                    for try await line in bytes.lines {
-                        guard line.hasPrefix("data:") else { continue }
-                        let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
-                        if payload == "[DONE]" { break }
-                        guard let data = payload.data(using: .utf8) else { continue }
-                        if let chunk = try? JSONDecoder().decode(StreamChunk.self, from: data),
-                           let delta = chunk.choices.first?.delta {
-                            // Content dulu, fallback ke reasoning_content (model reasoning).
-                            let token = delta.content?.isEmpty == false ? delta.content
-                                : (delta.reasoning_content?.isEmpty == false ? delta.reasoning_content : nil)
-                            if let token, !token.isEmpty {
-                                gotAnything = true
-                                continuation.yield(token)
-                            }
-                        }
-                    }
-                    if !gotAnything {
-                        continuation.finish(throwing: APIError.emptyReply)
-                    } else {
-                        continuation.finish()
-                    }
-                } catch {
-                    continuation.finish(throwing: error)
+            let decoded = try JSONDecoder().decode(GenerateResponse.self, from: data)
+            if let apiErr = decoded.error {
+                // Body 200 tapi envelope error (jarang) — petakan status string.
+                switch apiErr.status {
+                case "UNAUTHENTICATED", "PERMISSION_DENIED": throw GeminiError.unauthorized
+                case "RESOURCE_EXHAUSTED": throw GeminiError.quotaExceeded
+                case "NOT_FOUND": throw GeminiError.modelNotFound
+                default: throw GeminiError.invalidResponse(apiErr.message ?? "error tak dikenal")
                 }
             }
+            let text = (decoded.candidates?.first?.content?.parts ?? [])
+                .compactMap(\.text).joined()
+            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw GeminiError.invalidResponse("candidates kosong")
+            }
+            return text
+        } catch let e as GeminiError {
+            throw e
+        } catch {
+            throw GeminiError.invalidResponse("decode: \(error.localizedDescription)")
         }
     }
 }
