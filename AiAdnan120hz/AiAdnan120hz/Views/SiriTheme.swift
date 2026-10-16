@@ -139,34 +139,45 @@ struct SiriOrbFaint: View {
     }
 }
 
-// MARK: - Loading spinner: titik-titik melingkar ala iOS (UIActivityIndicatorView).
+// MARK: - Loading spinner: 8 titik hitam melingkar, ukuran membesar-mengecil berurutan.
 // Muncul saat user sudah kirim pesan dan AI sedang merespons.
 struct SiriLoadingBubble: View {
     @State private var phase = 0
-    private let dotCount = 12
-    private let timer = Timer.publish(every: 1.0 / 12.0, on: .main, in: .common).autoconnect()
+    private let dotCount = 8
+    private let timer = Timer.publish(every: 0.12, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
             ForEach(0..<dotCount, id: \.self) { i in
                 Circle()
-                    .fill(Color(.systemGray))
-                    .frame(width: 7, height: 7)
-                    .offset(y: -19)
-                    .rotationEffect(.degrees(Double(i) * 360.0 / Double(dotCount)))
+                    .fill(.black)
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(scale(for: i))
                     .opacity(opacity(for: i))
+                    .offset(y: -20)
+                    .rotationEffect(.degrees(Double(i) * 360.0 / Double(dotCount)))
             }
         }
-        .frame(width: 52, height: 52)
+        .frame(width: 56, height: 56)
         .onReceive(timer) { _ in
             phase = (phase + 1) % dotCount
         }
         .accessibilityHidden(true)
     }
 
-    /// Titik terdepan paling terang, ekor memudar — efek putar ala activity indicator.
+    /// Titik terdepan paling besar & pekat, ekor mengecil & memudar.
+    private func distance(_ i: Int) -> Int {
+        (phase - i + dotCount) % dotCount
+    }
+
+    private func scale(for i: Int) -> CGFloat {
+        let d = Double(distance(i))
+        // 1.0 di depan → 0.35 di ekor.
+        return CGFloat(1.0 - (d / Double(dotCount)) * 0.65)
+    }
+
     private func opacity(for i: Int) -> Double {
-        let distance = (phase - i + dotCount) % dotCount
-        return 1.0 - (Double(distance) / Double(dotCount)) * 0.85
+        let d = Double(distance(i))
+        return 1.0 - (d / Double(dotCount)) * 0.7
     }
 }

@@ -52,6 +52,7 @@ struct ConversationsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Top bar: hamburger kanan (berisi Grid / List / Select / Settings).
+            // Sembunyi saat search aktif; muncul lagi kalau search ditutup.
             HStack {
                 Spacer()
 
@@ -60,7 +61,7 @@ struct ConversationsView: View {
                         exitSelectMode()
                     }
                     .accessibilityLabel(Text("Done"))
-                } else {
+                } else if !showSearch {
                     Menu {
                         Button { withAnimation(SiriTheme.liquid) { mode = .grid } } label: {
                             Label("Grid", systemImage: "square.grid.2x2")
