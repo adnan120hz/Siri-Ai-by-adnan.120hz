@@ -141,6 +141,23 @@ struct VoiceModelView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 24)
 
+                // Slider expressivity (nge-bass ↔ cempreng). Beneran ngaruh ke pitch.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Expressivity")
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Slider(value: Binding(
+                        get: { Double(voice.expressivity) },
+                        set: { voice.expressivity = Float($0) }
+                    ), in: 0.0...1.0, step: 0.05, onEditingChanged: { editing in
+                        // Bunyi test sekali pas slider dilepas (bukan tiap geser).
+                        if !editing { playSample() }
+                    })
+                    .tint(.white)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+
                 // Judul + deskripsi.
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Customize Your\nSiri Voice")

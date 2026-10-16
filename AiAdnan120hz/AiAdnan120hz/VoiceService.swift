@@ -101,6 +101,12 @@ final class VoiceService: ObservableObject {
         didSet { UserDefaults.standard.set(speechRate, forKey: "speechRate") }
     }
 
+    /// Expressivity (0.0 = nge-bass, 1.0 = cempreng, 0.5 = normal). Diatur via slider.
+    /// Beneran ngaruh: jadi faktor pengali pitch di speak().
+    @Published var expressivity: Float = UserDefaults.standard.object(forKey: "expressivity") as? Float ?? 0.5 {
+        didSet { UserDefaults.standard.set(expressivity, forKey: "expressivity") }
+    }
+
     private var phase: Phase = .idle
     /// Token untuk membatalkan persiapan yang masih in-flight (mis. dialog izin kebuka lalu user tap stop).
     private var preparingToken = UUID()
@@ -359,7 +365,10 @@ final class VoiceService: ObservableObject {
             ?? AVSpeechSynthesisVoice(language: language.rawValue)
             ?? AVSpeechSynthesisVoice(language: "en-US")
         let rate = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0
-        utterance.pitchMultiplier = model.pitch(for: language)
+        let expressivity = UserDefaults.standard.object(forKey: "expressivity") as? Float ?? 0.5
+        // Expressivity jadi faktor pitch: 0.0 → 0.8x (nge-bass), 0.5 → 1.0x (normal), 1.0 → 1.2x (cempreng).
+        let expressivityFactor = 0.8 + expressivity * 0.4
+        utterance.pitchMultiplier = model.pitch(for: language) * expressivityFactor
         utterance.rate = rate * model.rateMultiplier * AVSpeechUtteranceDefaultSpeechRate
         synthesizer.speak(utterance)
     }
