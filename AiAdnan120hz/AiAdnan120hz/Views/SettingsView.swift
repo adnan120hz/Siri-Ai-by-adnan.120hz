@@ -100,8 +100,8 @@ struct SettingsView: View {
     private func refreshStorage() {
         Task.detached {
             let used = StorageQuota.usedBytes()
-            let ratio = Double(used) / Double(StorageQuota.capBytes)
             await MainActor.run {
+                let ratio = Double(used) / Double(StorageQuota.capBytes)
                 storageText = StorageQuota.formatted(used)
                 storageRatio = min(1.0, ratio)
             }

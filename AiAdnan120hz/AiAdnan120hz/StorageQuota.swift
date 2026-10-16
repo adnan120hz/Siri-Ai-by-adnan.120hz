@@ -5,9 +5,9 @@ import Foundation
 // canAccommodate(_:). SwiftData menyimpan implisit — di sana enforcement
 // hanya best-effort (lihat komentar di titik save), tidak diklaim total.
 
-@MainActor
 enum StorageQuota {
     /// Cap dinamis mengikuti status premium: 25 GB (free) / 50 GB (premium).
+    @MainActor
     static var capBytes: Int64 {
         PremiumState.shared.isPremium ? 50 * 1024 * 1024 * 1024 : 25 * 1024 * 1024 * 1024
     }
@@ -18,6 +18,7 @@ enum StorageQuota {
 
     /// Proyeksi: True kalau `additionalBytes` masih muat di bawah cap
     /// (usedBytes + additional ≤ cap).
+    @MainActor
     static func canAccommodate(_ additionalBytes: Int64) -> Bool {
         usedBytes() + max(0, additionalBytes) <= capBytes
     }
@@ -53,11 +54,13 @@ enum StorageQuota {
         return String(format: "%.1f MB", Double(bytes) / 1_048_576.0)
     }
 
+    @MainActor
     static var usageRatio: Double {
         let used = Double(usedBytes())
         guard capBytes > 0 else { return 0 }
         return used / Double(capBytes)
     }
 
+    @MainActor
     static var isOverWarning: Bool { usageRatio >= warnThreshold }
 }
