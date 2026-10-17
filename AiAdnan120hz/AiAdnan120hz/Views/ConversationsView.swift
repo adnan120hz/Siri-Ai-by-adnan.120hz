@@ -540,9 +540,26 @@ struct ConversationsView: View {
 struct SiriHamburgerIcon: View {
     var body: some View {
         ZStack {
+            // Lingkaran putih glossy: gradasi + refleksi cahaya di atas
+            // biar tetap menonjol tanpa background abu-abu.
             Circle()
-                .fill(.white)
-                .shadow(color: .black.opacity(0.06), radius: 4, y: 1)
+                .fill(
+                    LinearGradient(
+                        colors: [.white, Color(white: 0.86)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .overlay(alignment: .top) {
+                    Ellipse()
+                        .fill(.white)
+                        .frame(width: 32, height: 16)
+                        .blur(radius: 6)
+                        .offset(y: 3)
+                        .opacity(0.85)
+                }
+                .clipShape(Circle())
+                .shadow(color: .black.opacity(0.16), radius: 6, y: 2)
             VStack(spacing: 5) {
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .fill(.black)
