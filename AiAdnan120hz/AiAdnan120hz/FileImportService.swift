@@ -181,7 +181,9 @@ struct FileImportService {
         )
     }
 
-// MARK: - Archive (ZIP / IPA / APK)
+}
+
+// MARK: - Archive (ZIP)
 
 private extension FileImportService {
 
@@ -353,6 +355,7 @@ private extension FileImportService {
         if out.count < maxStrings { flush() }
         return out
     }
+}
 
 // MARK: - ZIP reader (tanpa library, parse manual)
 
