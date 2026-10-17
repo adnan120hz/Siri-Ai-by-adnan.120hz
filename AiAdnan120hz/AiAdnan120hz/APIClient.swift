@@ -217,7 +217,7 @@ enum GeminiClient {
         case 401, 403:
             throw GeminiError.unauthorized
         case 404:
-            throw GeminiError.modelNotFound
+            throw GeminiError.modelNotFound()
         case 429:
             throw GeminiError.quotaExceeded
         default:
@@ -232,7 +232,7 @@ enum GeminiClient {
                 switch apiErr.status {
                 case "UNAUTHENTICATED", "PERMISSION_DENIED": throw GeminiError.unauthorized
                 case "RESOURCE_EXHAUSTED": throw GeminiError.quotaExceeded
-                case "NOT_FOUND": throw GeminiError.modelNotFound
+                case "NOT_FOUND": throw GeminiError.modelNotFound()
                 default: throw GeminiError.invalidResponse(apiErr.message ?? "error tak dikenal")
                 }
             }
