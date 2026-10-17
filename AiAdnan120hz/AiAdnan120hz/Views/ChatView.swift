@@ -31,7 +31,6 @@ struct ChatView: View {
     /// Picker dokumen (premium, file reading): pdf/jpg/png/zip/ipa/apk/raw.
     @State private var showDocumentPicker = false
     /// Gambar dari dokumen premium, menunggu dikirim bersama pesan berikutnya.
-    @State private var pendingFileImages: [(data: Data, mimeType: String)] = []
     @State private var alertText: String?
     @State private var wasSending = false
     /// True kalau pesan terakhir dikirim via voice input (mic) — AI wajib bersuara balik.
@@ -46,7 +45,7 @@ struct ChatView: View {
 
     private var canSend: Bool {
         !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !pendingImages.isEmpty || !pendingFileImages.isEmpty
+            || !pendingImages.isEmpty
     }
 
     var body: some View {
@@ -150,48 +149,6 @@ struct ChatView: View {
                 }
             }
 
-            // Pending document images (premium file reading): thumbnail + hapus.
-            if !pendingFileImages.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: SiriTheme.s) {
-                        ForEach(Array(pendingFileImages.enumerated()), id: \.offset) { idx, item in
-                            ZStack(alignment: .topTrailing) {
-                                if let ui = UIImage(data: item.data) {
-                                    Image(uiImage: ui)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 64, height: 64)
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                } else {
-                                    Image(systemName: "doc.text.fill")
-                                        .font(.system(size: 28))
-                                        .frame(width: 64, height: 64)
-                                        .background(Color(.secondarySystemBackground))
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                }
-                                Button {
-                                    pendingFileImages.remove(at: idx)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundStyle(.primary, Color(.systemBackground))
-                                }
-                                .offset(x: 6, y: -6)
-                                .accessibilityLabel(Text("Remove document attachment"))
-                            }
-                            .transition(.scale(scale: 0.5).combined(with: .opacity))
-                        }
-                    }
-                    .padding(.horizontal, SiriTheme.m)
-                    .padding(.vertical, SiriTheme.s)
-                    .animation(SiriTheme.pop, value: pendingFileImages.count)
-                }
-            }
-
-            // Free-limit banner: muncul saat pengiriman diblokir (20/chat atau 40/hari).
-            if let notice = viewModel.limitNotice {
-                limitBanner(for: notice)
-            }
 
             // Bottom bar.
             HStack(spacing: 10) {
@@ -236,7 +193,7 @@ struct ChatView: View {
                 onPick: { handleDocumentPick($0) },
                 onCancel: {},
                 onUnsupportedType: { ext in
-                    alertText = "Tipe file '\(ext)' belum didukung. Yang didukung: pdf, jpg, png, zip, ipa, apk, raw."
+                    alertText = "Format '\(ext)' diblokir. Hanya file PDF dan ZIP yang didukung."
                 }
             )
         }
@@ -352,8 +309,8 @@ struct ChatView: View {
                     plusRow(icon: "doc.fill", title: "Files") {
                         dismissMenu(); showFilePicker = true
                     }
-                    // Dokumen (baca file): free tidak melihat opsi ini sama sekali.
-                    // Premium + toggle "File reading" ON → buka picker.
+                    // Dokumen (baca file, HANYA pdf+zip): free tidak melihat opsi ini
+                    // sama sekali. Premium + toggle "File reading" ON → buka picker.
                     // Premium + toggle OFF → baris terkunci, arahkan ke Subscriptions.
                     if premiumState.isPremium {
                         if premiumFeatures.fileReadingEnabled {
@@ -449,9 +406,8 @@ struct ChatView: View {
         if viewModel.isSending { return }
         let text = inputText
         let images = pendingImages
-        let fileImages = pendingFileImages
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !images.isEmpty || !fileImages.isEmpty else { return }
+            || !images.isEmpty else { return }
         voice.stopSpeaking()
         // Catat apakah pesan ini via voice — menentukan auto-speak jawaban AI.
         lastSentViaVoice = pendingVoiceInput
@@ -460,13 +416,12 @@ struct ChatView: View {
         viewModel.send(
             conversation: conversation, text: text,
             imageDatas: images.map { ($0, false) },
-            fileImages: fileImages,
+            fileImages: [],
             note: nil,
             context: context, appState: appState
         )
         inputText = ""
         pendingImages = []
-        pendingFileImages = []
         fieldFocused = false
     }
 
@@ -486,7 +441,8 @@ struct ChatView: View {
         }
     }
 
-    /// Alur dokumen premium: pick → ekstrak → simpan sebagai source / gambar pending.
+    /// Alur dokumen premium: pick → ekstrak → simpan sebagai source.
+    /// Hanya PDF dan ZIP (keputusan user 2026-10-17).
     /// Ekstraksi jalan di background (PDF/ZIP besar tidak hang UI).
     /// Gagal ekstrak = pesan error Indonesia, pesan kosong TIDAK dikirim.
     @MainActor
@@ -501,21 +457,7 @@ struct ChatView: View {
                 alertText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 return
             }
-            if extracted.kind == .image {
-                // Gambar: teks TIDAK diekstrak lokal — dikirim via sendWithImages.
-                // Downscale dulu (maks 1024px, seperti foto kamera) agar tidak timeout/OOM.
-                guard let data = extracted.imageData else {
-                    alertText = "Gambar '\(extracted.fileName)' tidak bisa dibaca. Coba file lain."
-                    return
-                }
-                if let scaled = MediaService.downscaleJPEG(data) {
-                    pendingFileImages.append((data: scaled, mimeType: "image/jpeg"))
-                } else {
-                    pendingFileImages.append((data: data, mimeType: extracted.imageMimeType ?? "image/jpeg"))
-                }
-                return
-            }
-            // pdf / archive / raw: masuk sebagai source conversation (dibaca buildPrompt).
+            // pdf / zip: masuk sebagai source conversation (dibaca buildPrompt).
             var text = extracted.textContent
             if !extracted.metadata.isEmpty { text = extracted.metadata + "\n\n" + text }
             text = text.trimmingCharacters(in: .whitespacesAndNewlines)

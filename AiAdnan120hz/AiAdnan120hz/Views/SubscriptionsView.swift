@@ -58,7 +58,7 @@ struct SubscriptionsView: View {
 
             VStack(spacing: 16) {
                 lockedRow(title: "File reading",
-                          desc: "PDF, images, ZIP, IPA, APK, RAW read directly by the AI.")
+                          desc: "PDF and ZIP files read directly by the AI.")
                 lockedRow(title: "Many voice options",
                           desc: "All real system voices — pick whichever you like.")
                 lockedRow(title: "Prompt modes",
@@ -169,7 +169,7 @@ struct SubscriptionsView: View {
             VStack(spacing: 20) {
                 Toggle(isOn: $features.fileReadingEnabled) {
                     featureLabel(title: "File reading",
-                                 desc: "Read PDF, images, ZIP, IPA, APK, RAW in chat.")
+                                 desc: "Read PDF and ZIP files in chat.")
                 }
 
                 Toggle(isOn: $features.allVoicesEnabled) {

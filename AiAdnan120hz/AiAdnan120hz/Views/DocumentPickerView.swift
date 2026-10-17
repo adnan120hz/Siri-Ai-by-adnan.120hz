@@ -5,20 +5,14 @@ import UIKit
 /// Picker file dokumen untuk fitur baca file (premium).
 /// Membungkus UIDocumentPickerViewController sebagai SwiftUI view.
 ///
-/// Tipe yang dibuka: PDF, JPEG, PNG, ZIP, dan `.data` (untuk ipa/apk/raw
-/// yang tidak punya UTType khusus). Ekstensi difilter SETELAH pick via
-/// `supportedExtensions`; file yang tidak didukung dilaporkan lewat
-/// `onUnsupportedType`, bukan dikarang/dibiarkan diam.
+/// HANYA PDF dan ZIP yang bisa dipilih (keputusan user 2026-10-17).
+/// Ekstensi difilter SETELAH pick via `supportedExtensions` sebagai
+/// pengaman lapis kedua; file lain dilaporkan lewat `onUnsupportedType`.
 struct DocumentPickerView: UIViewControllerRepresentable {
     typealias UIViewControllerType = UIDocumentPickerViewController
 
-    /// Ekstensi yang didukung FileImportService (lowercase, tanpa titik).
-    static let supportedExtensions: Set<String> = [
-        "pdf",
-        "jpg", "jpeg", "png",
-        "zip", "ipa", "apk",
-        "raw", "cr2", "nef", "dng", "arw"
-    ]
+    /// Ekstensi yang didukung (lowercase, tanpa titik): pdf + zip saja.
+    static let supportedExtensions: Set<String> = ["pdf", "zip"]
 
     /// Dipanggil dengan URL file yang dipilih (dicopy ke sandbox karena asCopy=true).
     var onPick: (URL) -> Void
@@ -32,9 +26,9 @@ struct DocumentPickerView: UIViewControllerRepresentable {
     }
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        // .data menampung ipa/apk/raw/cr2/nef/dng/arw yang tak punya UTType khusus.
+        // Hanya PDF dan ZIP — tipe lain tidak bisa dipilih sama sekali.
         let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [.pdf, .jpeg, .png, .zip, .data],
+            forOpeningContentTypes: [.pdf, .zip],
             asCopy: true
         )
         picker.delegate = context.coordinator

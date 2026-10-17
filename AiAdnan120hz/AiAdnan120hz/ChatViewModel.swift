@@ -58,7 +58,7 @@ final class ChatViewModel: ObservableObject {
     }
 
     /// Kirim pesan user + gambar. `imageDatas` = JPEG siap kirim (foto/video frames).
-    /// `fileImages` = gambar dari dokumen premium (pdf/jpg/png via FileImportService),
+    /// `fileImages` = lampiran gambar (kini selalu kosong; dokumen premium hanya pdf/zip),
     /// sudah membawa mimeType aslinya — dikirim via `sendWithImages`.
     func send(conversation: Conversation, text: String,
               imageDatas: [(data: Data, isVideoFrame: Bool)],

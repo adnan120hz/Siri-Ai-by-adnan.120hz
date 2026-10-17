@@ -1,7 +1,6 @@
 import Foundation
 import PDFKit
 import UniformTypeIdentifiers
-import UIKit
 
 // MARK: - Model
 
@@ -76,8 +75,9 @@ enum FileImportError: LocalizedError {
 /// menjadi teks/metadata yang bisa dikirim sebagai konteks ke AI.
 ///
 /// Semua yang dilakukan di sini nyata: PDF via PDFKit, ZIP via parser
-/// central-directory + decoder DEFLATE mentah sendiri (tanpa library),
-/// Info.plist ipa via PropertyListSerialization. Tidak ada placeholder.
+/// central-directory + decoder DEFLATE mentah sendiri (tanpa library).
+/// Hanya PDF dan ZIP yang didukung (keputusan user 2026-10-17).
+/// Tidak ada placeholder.
 struct FileImportService {
     static let shared = FileImportService()
     private init() {}
@@ -85,7 +85,6 @@ struct FileImportService {
     private let maxPDFPages = 50
     private let maxPDFChars = 100 * 1024        // 100 KB teks
     private let maxPDFBytes = 50 * 1024 * 1024  // 50 MB
-    private let maxImageBytes = 20 * 1024 * 1024 // 20 MB
     private let maxArchiveBytes = 100 * 1024 * 1024 // 100 MB
 
     // MARK: Entry point
@@ -104,12 +103,8 @@ struct FileImportService {
         switch ext {
         case "pdf":
             return try extractPDF(from: url, fileName: fileName)
-        case "jpg", "jpeg", "png":
-            return try extractImage(from: url, fileName: fileName, ext: ext)
-        case "zip", "ipa", "apk":
+        case "zip":
             return try extractArchive(from: url, fileName: fileName, ext: ext)
-        case "raw", "cr2", "nef", "dng", "arw":
-            return try extractRaw(from: url, fileName: fileName, ext: ext)
         default:
             throw FileImportError.unsupportedType(ext.isEmpty ? "(tanpa ekstensi)" : ext)
         }
@@ -185,60 +180,6 @@ struct FileImportService {
             metadata: meta
         )
     }
-
-    // MARK: Image
-
-    private func extractImage(from url: URL, fileName: String, ext: String) throws -> ExtractedFile {
-        guard let size = fileSize(of: url) else {
-            throw FileImportError.cannotAccessFile(fileName)
-        }
-        if size > maxImageBytes {
-            throw FileImportError.fileTooLarge("gambar '\(fileName)' (\(formatBytes(size))) melebihi batas 20 MB")
-        }
-
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            throw FileImportError.imageUnreadable("Gagal membaca '\(fileName)': \(error.localizedDescription)")
-        }
-        guard !data.isEmpty else {
-            throw FileImportError.imageUnreadable("File '\(fileName)' kosong (0 byte).")
-        }
-
-        // Validasi magic bytes — bukan sekadar percaya ekstensi.
-        let jpegMagic: [UInt8] = [0xFF, 0xD8, 0xFF]
-        let pngMagic: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
-        let isJPEG = data.starts(with: jpegMagic)
-        let isPNG = data.starts(with: pngMagic)
-        guard isJPEG || isPNG else {
-            throw FileImportError.imageUnreadable("File '\(fileName)' bukan JPEG/PNG yang valid (magic bytes tidak cocok).")
-        }
-        // Validasi data benar-benar bisa di-decode sebagai gambar.
-        guard let image = UIImage(data: data) else {
-            throw FileImportError.imageUnreadable("Data gambar '\(fileName)' rusak dan tidak bisa di-decode.")
-        }
-
-        let dims: String
-        if let cg = image.cgImage {
-            dims = "\(cg.width)×\(cg.height) piksel"
-        } else {
-            dims = "dimensi tidak terbaca"
-        }
-        let mime = (ext == "png") ? "image/png" : "image/jpeg"
-        let meta = "Tipe: gambar (.\(ext)) • \(formatBytes(size)) • \(dims)\n"
-            + "Catatan: isi gambar TIDAK diekstrak sebagai teks di sini — gambar dikirim apa adanya ke AI (Gemini vision) bersama pertanyaanmu."
-
-        return ExtractedFile(
-            fileName: fileName,
-            kind: .image,
-            textContent: "",
-            metadata: meta,
-            imageData: data,
-            imageMimeType: mime
-        )
-    }
-}
 
 // MARK: - Archive (ZIP / IPA / APK)
 
@@ -412,62 +353,6 @@ private extension FileImportService {
         if out.count < maxStrings { flush() }
         return out
     }
-
-    // MARK: RAW
-
-    func extractRaw(from url: URL, fileName: String, ext: String) throws -> ExtractedFile {
-        guard let size = fileSize(of: url) else {
-            throw FileImportError.cannotAccessFile(fileName)
-        }
-        let preview: [UInt8]
-        do {
-            let handle = try FileHandle(forReadingFrom: url)
-            defer { try? handle.close() }
-            let chunk = try handle.read(upToCount: 512) ?? Data()
-            preview = [UInt8](chunk)
-        } catch {
-            throw FileImportError.rawUnreadable("Gagal membaca '\(fileName)': \(error.localizedDescription)")
-        }
-        guard !preview.isEmpty else {
-            throw FileImportError.rawUnreadable("File '\(fileName)' kosong (0 byte).")
-        }
-
-        let meta = "Tipe: RAW kamera (.\(ext)) • \(formatBytes(size))\n"
-            + "Catatan: decode gambar RAW tidak didukung — hanya metadata dan pratinjau hex 512 byte pertama."
-
-        return ExtractedFile(
-            fileName: fileName,
-            kind: .raw,
-            textContent: hexdump(preview),
-            metadata: meta
-        )
-    }
-
-    /// Format hexdump ala `xxd`: offset + 16 byte hex + kolom ASCII.
-    func hexdump(_ bytes: [UInt8]) -> String {
-        var lines: [String] = []
-        var offset = 0
-        while offset < bytes.count {
-            let end = min(offset + 16, bytes.count)
-            let chunk = bytes[offset..<end]
-            var hex = ""
-            var ascii = ""
-            for (i, b) in chunk.enumerated() {
-                hex += String(format: "%02x ", b)
-                if i == 7 { hex += " " }
-                if b >= 0x20 && b < 0x7F, let scalar = UnicodeScalar(UInt32(b)) {
-                    ascii.append(Character(scalar))
-                } else {
-                    ascii.append(".")
-                }
-            }
-            let paddedHex = hex.padding(toLength: 50, withPad: " ", startingAt: 0)
-            lines.append(String(format: "%08x  %@ |%@|", UInt32(offset), paddedHex, ascii))
-            offset = end
-        }
-        return lines.joined(separator: "\n")
-    }
-}
 
 // MARK: - ZIP reader (tanpa library, parse manual)
 
