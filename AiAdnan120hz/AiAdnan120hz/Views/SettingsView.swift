@@ -4,7 +4,7 @@ import SwiftData
 
 // MARK: - Settings. Native Form.
 // Key Gemini TANAM via Secrets (CI) — tidak ada input key manual.
-// Voice, appearance, 25GB storage, local memory.
+// Voice, appearance, dynamic storage cap (25GB free / 50GB premium), local memory.
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
@@ -47,7 +47,7 @@ struct SettingsView: View {
 
                 Section(header: Text("Local storage")) {
                     ProgressView(value: storageRatio)
-                    Text("\(storageText) / 25 GB")
+                    Text("\(storageText) / \(StorageQuota.formatted(StorageQuota.capBytes))")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     if storageRatio >= StorageQuota.warnThreshold {

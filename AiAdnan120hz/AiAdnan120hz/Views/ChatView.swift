@@ -352,11 +352,19 @@ struct ChatView: View {
                     plusRow(icon: "doc.fill", title: "Files") {
                         dismissMenu(); showFilePicker = true
                     }
-                    // Dokumen (baca file): HANYA premium + toggle file reading ON.
-                    // Free tier tidak melihat opsi ini sama sekali.
-                    if premiumState.isPremium && premiumFeatures.fileReadingEnabled {
-                        plusRow(icon: "doc.text.fill", title: "Documents") {
-                            dismissMenu(); showDocumentPicker = true
+                    // Dokumen (baca file): free tidak melihat opsi ini sama sekali.
+                    // Premium + toggle "File reading" ON → buka picker.
+                    // Premium + toggle OFF → baris terkunci, arahkan ke Subscriptions.
+                    if premiumState.isPremium {
+                        if premiumFeatures.fileReadingEnabled {
+                            plusRow(icon: "doc.text.fill", title: "Documents") {
+                                dismissMenu(); showDocumentPicker = true
+                            }
+                        } else {
+                            plusRow(icon: "lock.fill", title: "Documents") {
+                                dismissMenu()
+                                alertText = "Aktifkan \"File reading\" di menu Subscriptions dulu untuk baca file."
+                            }
                         }
                     }
                 }
@@ -479,47 +487,52 @@ struct ChatView: View {
     }
 
     /// Alur dokumen premium: pick → ekstrak → simpan sebagai source / gambar pending.
+    /// Ekstraksi jalan di background (PDF/ZIP besar tidak hang UI).
     /// Gagal ekstrak = pesan error Indonesia, pesan kosong TIDAK dikirim.
     @MainActor
     private func handleDocumentPick(_ url: URL) {
-        let extracted: ExtractedFile
-        do {
-            extracted = try FileImportService.shared.extract(from: url)
-        } catch {
-            alertText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            return
-        }
-        if extracted.kind == .image {
-            // Gambar: teks TIDAK diekstrak lokal — dikirim via sendWithImages.
-            // Downscale dulu (maks 1024px, seperti foto kamera) agar tidak timeout/OOM.
-            guard let data = extracted.imageData else {
-                alertText = "Gambar '\(extracted.fileName)' tidak bisa dibaca. Coba file lain."
+        Task {
+            let extracted: ExtractedFile
+            do {
+                extracted = try await Task.detached(priority: .userInitiated) {
+                    try FileImportService.shared.extract(from: url)
+                }.value
+            } catch {
+                alertText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 return
             }
-            if let scaled = MediaService.downscaleJPEG(data) {
-                pendingFileImages.append((data: scaled, mimeType: "image/jpeg"))
-            } else {
-                pendingFileImages.append((data: data, mimeType: extracted.imageMimeType ?? "image/jpeg"))
+            if extracted.kind == .image {
+                // Gambar: teks TIDAK diekstrak lokal — dikirim via sendWithImages.
+                // Downscale dulu (maks 1024px, seperti foto kamera) agar tidak timeout/OOM.
+                guard let data = extracted.imageData else {
+                    alertText = "Gambar '\(extracted.fileName)' tidak bisa dibaca. Coba file lain."
+                    return
+                }
+                if let scaled = MediaService.downscaleJPEG(data) {
+                    pendingFileImages.append((data: scaled, mimeType: "image/jpeg"))
+                } else {
+                    pendingFileImages.append((data: data, mimeType: extracted.imageMimeType ?? "image/jpeg"))
+                }
+                return
             }
-            return
+            // pdf / archive / raw: masuk sebagai source conversation (dibaca buildPrompt).
+            var text = extracted.textContent
+            if !extracted.metadata.isEmpty { text = extracted.metadata + "\n\n" + text }
+            text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else {
+                alertText = "File '\(extracted.fileName)' tidak menghasilkan teks yang bisa dibaca. Coba file lain."
+                return
+            }
+            guard StorageQuota.canAccommodate(Int64(text.utf8.count)) else {
+                alertText = StorageQuota.fullMessage
+                return
+            }
+            let source = SourceAttachment(fileName: extracted.fileName, extractedText: text)
+            conversation.sources.append(source)
+            conversation.updatedAt = Date()
+            try? context.save()
+            alertText = "Dokumen '\(extracted.fileName)' ditambahkan sebagai sumber. Tulis pertanyaanmu lalu kirim."
         }
-        // pdf / archive / raw: masuk sebagai source conversation (dibaca buildPrompt).
-        var text = extracted.textContent
-        if !extracted.metadata.isEmpty { text = extracted.metadata + "\n\n" + text }
-        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else {
-            alertText = "File '\(extracted.fileName)' tidak menghasilkan teks yang bisa dibaca. Coba file lain."
-            return
-        }
-        guard StorageQuota.canAccommodate(Int64(text.utf8.count)) else {
-            alertText = StorageQuota.fullMessage
-            return
-        }
-        let source = SourceAttachment(fileName: extracted.fileName, extractedText: text)
-        conversation.sources.append(source)
-        conversation.updatedAt = Date()
-        try? context.save()
-        alertText = "Dokumen '\(extracted.fileName)' ditambahkan sebagai sumber. Tulis pertanyaanmu lalu kirim."
     }
 
     // MARK: - Free-limit banner.
@@ -565,12 +578,13 @@ struct ChatView: View {
 
     @MainActor
     private func speakIfEnabled() {
-        // Gating via VoiceService.speakReply:
-        // Free → selalu diam (teks saja). Premium → hanya kalau toggle "Voice reply" ON.
-        guard lastSentViaVoice || appState.autoSpeak else { return }
+        // Aturan user 2026-10-17 (deterministik, tanpa tier gate):
+        // - Pesan user via VOICE → balasan AI SELALU dibacakan (free & premium).
+        // - Pesan user via TEKS → dibacakan HANYA kalau "Read AI responses aloud"
+        //   di Settings ON.
         guard let last = messages.last(where: { $0.role == "assistant" }),
               last.errorText == nil, !last.text.isEmpty else { return }
-        voice.speakReply(last.text)
+        voice.speakReply(last.text, fromVoiceInput: lastSentViaVoice, textReplyAllowed: appState.autoSpeak)
     }
 }
 

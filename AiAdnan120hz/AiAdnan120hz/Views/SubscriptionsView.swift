@@ -14,7 +14,6 @@ struct SubscriptionsView: View {
 
     @ObservedObject private var premium = PremiumState.shared
     @ObservedObject private var features = PremiumFeatures.shared
-    @ObservedObject private var voice = VoiceService.shared
 
     /// Lingkaran premium di history disembunyikan/pindah (key verbatim kontrak).
     @AppStorage("siri.premium.hideCircle") private var hideCircle = false
@@ -64,8 +63,6 @@ struct SubscriptionsView: View {
                           desc: "All real system voices — pick whichever you like.")
                 lockedRow(title: "Prompt modes",
                           desc: "AI speaking style: Gaul, Formal, Santai, or Custom.")
-                lockedRow(title: "Voice reply",
-                          desc: "AI replies are read aloud in your chosen voice.")
                 lockedRow(title: "Storage 50GB",
                           desc: "Storage grows from 25GB to 50GB.")
                 lockedRow(title: "Unlimited messages & topics",
@@ -175,9 +172,9 @@ struct SubscriptionsView: View {
                                  desc: "Read PDF, images, ZIP, IPA, APK, RAW in chat.")
                 }
 
-                Toggle(isOn: $voice.voiceReplyEnabled) {
-                    featureLabel(title: "Voice reply",
-                                 desc: "AI replies are read aloud.")
+                Toggle(isOn: $features.allVoicesEnabled) {
+                    featureLabel(title: "All voice menu",
+                                 desc: "Unlock every system voice in the voice menu.")
                 }
 
                 Toggle(isOn: $features.usePremiumKey) {
@@ -211,7 +208,7 @@ struct SubscriptionsView: View {
 
                 Toggle(isOn: $hideCircle) {
                     featureLabel(title: "Hide subscriptions",
-                                 desc: "The premium circle moves to the top-right corner.")
+                                 desc: "Subscriptions moves into the ••• menu at the top-right.")
                 }
             }
 

@@ -31,7 +31,8 @@ struct ConversationsView: View {
     @State private var renameText = ""
     @State private var showVoiceModel = false
     @State private var showSubscriptions = false
-    /// Lingkaran premium: kiri atas normal, pindah kanan atas bila ON.
+    /// Lingkaran premium: kiri atas normal, hilang bila ON
+    /// (akses pindah ke item Subscriptions di menu •••).
     @AppStorage("siri.premium.hideCircle") private var hidePremiumCircle = false
 
     private var filtered: [Conversation] {
@@ -54,10 +55,11 @@ struct ConversationsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar: hamburger kanan (berisi Grid / List / Select / Settings).
-            // Lingkaran premium di kiri atas; pindah kanan atas bila
-            // "Hide subscriptions" ON. Sembunyi saat search aktif; muncul
-            // lagi kalau search ditutup.
+            // Top bar: hamburger kanan (berisi Grid / List / Select / Voice /
+            // Subscriptions-bila-hide / Settings).
+            // Lingkaran premium di kiri atas; HILANG bila "Hide subscriptions"
+            // ON (akses pindah ke item Subscriptions di menu •••).
+            // Sembunyi saat search aktif; muncul lagi kalau search ditutup.
             HStack {
                 if !hidePremiumCircle && !showSearch {
                     premiumCircleButton
@@ -88,6 +90,13 @@ struct ConversationsView: View {
                         Button { showVoiceModel = true } label: {
                             Label("Voice", systemImage: "waveform")
                         }
+                        // "Hide subscriptions" ON: lingkaran premium hilang,
+                        // aksesnya pindah ke item ini di dalam menu •••.
+                        if hidePremiumCircle {
+                            Button { showSubscriptions = true } label: {
+                                Label("Subscriptions", systemImage: "crown.fill")
+                            }
+                        }
                         Divider()
                         Button { showSettings = true } label: {
                             Label("Settings", systemImage: "gearshape")
@@ -98,9 +107,8 @@ struct ConversationsView: View {
                     .tint(.primary)
                     .accessibilityLabel(Text("View options"))
                 }
-                if hidePremiumCircle && !showSearch {
-                    premiumCircleButton
-                }
+                // Lingkaran premium TIDAK dipindah ke kanan saat hide —
+                // aksesnya masuk ke item "Subscriptions" di menu ••• (di atas).
             }
             .padding(.horizontal, SiriTheme.m)
             .padding(.top, SiriTheme.s)
