@@ -146,7 +146,7 @@ final class ChatViewModel: ObservableObject {
         conversation.messages.append(assistantMsg)
         try? context.save()
 
-        print("[SiriAi] send(): model=\(GeminiClient.primaryModel) text=\(trimmed.prefix(60)) images=\(imageDatas.count) fileImages=\(fileImages.count) premiumKey=\(Self.useEffectivePremiumKey)")
+        print("[SiriAi] send(): model=\(GeminiClient.primaryModel) text=\(trimmed.prefix(60)) images=\(imageDatas.count) fileImages=\(fileImages.count)")
 
         // Capture immutable copies for the Task (Swift 6 concurrency).
         let taskAssistantMsg = assistantMsg

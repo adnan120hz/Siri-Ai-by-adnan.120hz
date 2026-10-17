@@ -104,6 +104,7 @@ struct ConversationsView: View {
                     } label: {
                         SiriHamburgerIcon()
                     }
+                    .buttonStyle(.plain) // Tanpa background abu-abu sistem — cuma lingkaran putih.
                     .tint(.primary)
                     .accessibilityLabel(Text("View options"))
                 }
