@@ -54,37 +54,60 @@ struct SubscriptionsView: View {
 
     private var lockedSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text("Yang kamu dapat dengan Premium")
+            Text("What you get with Premium")
                 .font(.headline)
 
             VStack(spacing: 16) {
-                lockedRow(title: "Baca file",
-                          desc: "PDF, gambar, ZIP, IPA, APK, RAW langsung dibaca AI.")
-                lockedRow(title: "Banyak pilihan suara",
-                          desc: "Semua suara sistem asli, pilih sesukamu.")
+                lockedRow(title: "File reading",
+                          desc: "PDF, images, ZIP, IPA, APK, RAW read directly by the AI.")
+                lockedRow(title: "Many voice options",
+                          desc: "All real system voices — pick whichever you like.")
                 lockedRow(title: "Prompt modes",
-                          desc: "Gaya bicara AI: Gaul, Formal, Santai, atau Custom.")
+                          desc: "AI speaking style: Gaul, Formal, Santai, or Custom.")
                 lockedRow(title: "Voice reply",
-                          desc: "Balasan AI dibacakan dengan suara pilihanmu.")
+                          desc: "AI replies are read aloud in your chosen voice.")
                 lockedRow(title: "Storage 50GB",
-                          desc: "Penyimpanan naik dari 25GB ke 50GB.")
-                lockedRow(title: "Pesan & topik unlimited",
-                          desc: "Tanpa batas 20 pesan dan tanpa limit harian.")
-                lockedRow(title: "Key kuota sendiri",
-                          desc: "Pakai Gemini key 2. Key 1 otomatis mati.")
+                          desc: "Storage grows from 25GB to 50GB.")
+                lockedRow(title: "Unlimited messages & topics",
+                          desc: "No 20-message cap and no daily limit.")
+                lockedRow(title: "Own quota key",
+                          desc: "Uses key 2. Key 1 turns off automatically.")
             }
 
-            // Harga.
+            // Harga + konversi + region support.
             VStack(alignment: .leading, spacing: 4) {
                 Text("Rp 5.000")
                     .font(.title)
                     .fontWeight(.bold)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Thailand: 9,22 THB")
+                    Text("Malaysia: 1,13 MYR")
+                    Text("Singapore: 0,36 SGD")
+                    Text("Japan: 43,81 JPY")
+                    Text("South Korea: 369,64 KRW")
+                    Text("China: 1,85 CNY")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
                 Text("via QRIS")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text("Region support: Indonesia (QRIS)")
+                    .padding(.top, 2)
+                Text("Region support:")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Indonesia (QRIS)")
+                    Text("Thailand (PromptPay)")
+                    Text("Malaysia (DuitNow)")
+                    Text("Singapore (NETS QR / SGQR)")
+                    Text("Japan (JPQR Global)")
+                    Text("South Korea (Seoul Pay / Jeju Pay)")
+                    Text("China (Alipay / UnionPay)")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
 
             // Tombol aksi.
@@ -114,7 +137,7 @@ struct SubscriptionsView: View {
                 .buttonStyle(.bordered)
 
                 if showRedeemInput {
-                    RedeemCodeView()
+                    RedeemCodeView(onRedeemed: { showRedeemInput = false })
                         .padding(.top, 4)
                 }
             }
@@ -142,24 +165,24 @@ struct SubscriptionsView: View {
 
     private var unlockedSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text("Premium aktif. Aktifkan fitur yang kamu mau — semua default mati.")
+            Text("Premium is active. Enable the features you want — all are off by default.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
             VStack(spacing: 20) {
                 Toggle(isOn: $features.fileReadingEnabled) {
                     featureLabel(title: "File reading",
-                                 desc: "Baca PDF, gambar, ZIP, IPA, APK, RAW di chat.")
+                                 desc: "Read PDF, images, ZIP, IPA, APK, RAW in chat.")
                 }
 
                 Toggle(isOn: $voice.voiceReplyEnabled) {
                     featureLabel(title: "Voice reply",
-                                 desc: "Balasan AI dibacakan dengan suara.")
+                                 desc: "AI replies are read aloud.")
                 }
 
                 Toggle(isOn: $features.usePremiumKey) {
                     featureLabel(title: "Other API Key",
-                                 desc: "Switch ke Gemini key 2, key 1 otomatis OFF.")
+                                 desc: "Switch to key 2, key 1 turns off automatically.")
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -177,7 +200,7 @@ struct SubscriptionsView: View {
                     }
 
                     if promptMode == .custom {
-                        TextField("Tulis gaya bicaramu sendiri…", text: $customText, axis: .vertical)
+                        TextField("Write your own speaking style…", text: $customText, axis: .vertical)
                             .textFieldStyle(.roundedBorder)
                             .lineLimit(3...6)
                             .onChange(of: customText) { _, newValue in
@@ -188,7 +211,7 @@ struct SubscriptionsView: View {
 
                 Toggle(isOn: $hideCircle) {
                     featureLabel(title: "Hide subscriptions",
-                                 desc: "Lingkaran premium pindah ke pojok kanan atas.")
+                                 desc: "The premium circle moves to the top-right corner.")
                 }
             }
 
@@ -198,7 +221,7 @@ struct SubscriptionsView: View {
                     .font(.body)
                     .fontWeight(.medium)
                 Spacer()
-                Text("Terpakai \(StorageQuota.formatted(usedStorage)) dari \(StorageQuota.capBytes == 50 * 1024 * 1024 * 1024 ? "50GB" : "25GB")")
+                Text("Used \(StorageQuota.formatted(usedStorage)) of \(StorageQuota.capBytes == 50 * 1024 * 1024 * 1024 ? "50GB" : "25GB")")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
