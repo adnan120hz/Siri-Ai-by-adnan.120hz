@@ -7,6 +7,7 @@ Cara pakai:
 
 Environment variables yang dibaca:
     GEMINI_API_KEY_FREE
+    GEMINI_API_KEY_PREMIUM
     REDEEM_SECRET
 
 ATURAN: script ini TIDAK PERNAH mencetak nilai secret ke stdout/log.
@@ -26,6 +27,7 @@ OUTPUT_PATH = os.path.join(
 # (nama env, nama properti Swift, nilai dummy lokal)
 SECRETS = [
     ("GEMINI_API_KEY_FREE", "geminiFreeKey", "DUMMY_FREE_KEY"),
+    ("GEMINI_API_KEY_PREMIUM", "geminiPremiumKey", "DUMMY_PREMIUM_KEY"),
     ("REDEEM_SECRET", "redeemSecret", "DUMMY_REDEEM_SECRET"),
 ]
 

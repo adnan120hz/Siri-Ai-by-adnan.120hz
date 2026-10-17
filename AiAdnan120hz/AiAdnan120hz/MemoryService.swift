@@ -9,6 +9,12 @@ import SwiftData
 enum MemoryService {
     static let maxFacts = 50
 
+    /// "Other API Key": sama seperti ChatViewModel — true hanya kalau premium
+    /// DAN toggle ON; selebihnya key 1 (free).
+    private static var useEffectivePremiumKey: Bool {
+        PremiumState.shared.isPremium && PremiumFeatures.shared.usePremiumKey
+    }
+
     static func systemPromptExtra(context: ModelContext, memoryEnabled: Bool,
                                   conversation: Conversation) -> String {
         var parts: [String] = []
@@ -41,7 +47,7 @@ enum MemoryService {
         Asisten: \(assistantText.prefix(1500))
         """
         do {
-            let raw = try await GeminiClient.sendText(prompt)
+            let raw = try await GeminiClient.sendText(prompt, usePremiumKey: useEffectivePremiumKey)
             TokenUsage.record(tokens: TokenUsage.estimateTokens(for: prompt) + TokenUsage.estimateTokens(for: raw))
             guard let data = raw.data(using: .utf8),
                   let facts = try? JSONDecoder().decode([String].self, from: data),
@@ -67,7 +73,7 @@ enum MemoryService {
             .map { "[\($0.role)]: \($0.text.prefix(800))" }.joined(separator: "\n")
         let prompt = "Ringkas percakapan berikut jadi 5-8 baris padat (Bahasa Indonesia):\n\(oldest)"
         do {
-            let summary = try await GeminiClient.sendText(prompt)
+            let summary = try await GeminiClient.sendText(prompt, usePremiumKey: useEffectivePremiumKey)
             TokenUsage.record(tokens: TokenUsage.estimateTokens(for: prompt) + TokenUsage.estimateTokens(for: summary))
             conversation.summary = summary
             try? context.save()
@@ -87,7 +93,7 @@ enum MemoryService {
         Judul:
         """
         do {
-            let title = try await GeminiClient.sendText(prompt)
+            let title = try await GeminiClient.sendText(prompt, usePremiumKey: useEffectivePremiumKey)
             let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: "\"", with: "")
                 .replacingOccurrences(of: "**", with: "")

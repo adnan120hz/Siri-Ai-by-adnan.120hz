@@ -51,6 +51,12 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Kirim pesan
 
+    /// "Other API Key": true HANYA kalau premium DAN toggle ON.
+    /// Segala kondisi lain (bukan premium, atau toggle mati) → selalu key 1 (free).
+    private static var useEffectivePremiumKey: Bool {
+        PremiumState.shared.isPremium && PremiumFeatures.shared.usePremiumKey
+    }
+
     /// Kirim pesan user + gambar. `imageDatas` = JPEG siap kirim (foto/video frames).
     /// `fileImages` = lampiran gambar (kini selalu kosong; dokumen premium hanya pdf/zip),
     /// sudah membawa mimeType aslinya — dikirim via `sendWithImages`.
@@ -146,7 +152,7 @@ final class ChatViewModel: ObservableObject {
         conversation.messages.append(assistantMsg)
         try? context.save()
 
-        print("[SiriAi] send(): model=\(GeminiClient.primaryModel) text=\(trimmed.prefix(60)) images=\(imageDatas.count) fileImages=\(fileImages.count)")
+        print("[SiriAi] send(): model=\(GeminiClient.primaryModel) text=\(trimmed.prefix(60)) images=\(imageDatas.count) fileImages=\(fileImages.count) premiumKey=\(Self.useEffectivePremiumKey)")
 
         // Capture immutable copies for the Task (Swift 6 concurrency).
         let taskAssistantMsg = assistantMsg
@@ -157,6 +163,7 @@ final class ChatViewModel: ObservableObject {
         let taskFileImages = fileImages
         let taskConversation = conversation
         let taskMemoryEnabled = appState.memoryEnabled
+        let taskUsePremiumKey = Self.useEffectivePremiumKey
 
         sendTask = Task { @MainActor in
             do {
@@ -165,11 +172,12 @@ final class ChatViewModel: ObservableObject {
                     + taskFileImages
                 if allImages.isEmpty {
                     full = try await GeminiClient.sendText(
-                        taskTrimmed, history: taskHistory, systemInstruction: taskSystem)
+                        taskTrimmed, history: taskHistory, systemInstruction: taskSystem,
+                        usePremiumKey: taskUsePremiumKey)
                 } else {
                     full = try await GeminiClient.sendWithImages(
                         taskTrimmed, images: allImages, history: taskHistory,
-                        systemInstruction: taskSystem)
+                        systemInstruction: taskSystem, usePremiumKey: taskUsePremiumKey)
                 }
                 print("[SiriAi] response OK (\(full.count) chars)")
                 // Estimasi token kasar untuk pelacak kuota lokal.
