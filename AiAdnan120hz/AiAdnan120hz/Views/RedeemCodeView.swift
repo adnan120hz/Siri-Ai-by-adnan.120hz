@@ -8,6 +8,10 @@ import SwiftUI
 
 struct RedeemCodeView: View {
 
+    /// Dipanggil setelah redeem sukses — parent menutup input inline supaya
+    /// langsung tampil menu utama subscriptions (state terbuka).
+    var onRedeemed: (() -> Void)? = nil
+
     @State private var code: String = ""
     @State private var isRedeeming: Bool = false
     @State private var errorMessage: String? = nil
@@ -17,14 +21,14 @@ struct RedeemCodeView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Kode Redeem")
+            Text("Redeem code")
                 .font(.headline)
 
             if premium.isPremium {
-                Text("Premium sudah aktif.")
+                Text("Premium is already active.")
                     .foregroundColor(.green)
             } else {
-                TextField("Contoh: SIRI-X7KQ-9M2P", text: $code)
+                TextField("Example: SIRI-X7KQ-9M2P", text: $code)
                     .textFieldStyle(.roundedBorder)
                     .autocapitalization(.allCharacters)
                     .disableAutocorrection(true)
@@ -73,9 +77,10 @@ struct RedeemCodeView: View {
                 isRedeeming = false
                 if valid {
                     PremiumState.shared.setRedeemed(true)
-                    successMessage = "Kode valid. Premium aktif."
+                    successMessage = "Valid code. Premium activated."
+                    onRedeemed?()
                 } else {
-                    errorMessage = "Kode redeem tidak valid."
+                    errorMessage = "Invalid redeem code."
                 }
             }
         }
