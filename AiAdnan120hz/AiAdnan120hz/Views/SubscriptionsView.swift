@@ -67,8 +67,6 @@ struct SubscriptionsView: View {
                           desc: "Storage grows from 25GB to 50GB.")
                 lockedRow(title: "Unlimited messages & topics",
                           desc: "No 20-message cap and no daily limit.")
-                lockedRow(title: "Own quota key",
-                          desc: "Uses key 2. Key 1 turns off automatically.")
             }
 
             // Harga + konversi + region support.
@@ -175,11 +173,6 @@ struct SubscriptionsView: View {
                 Toggle(isOn: $features.allVoicesEnabled) {
                     featureLabel(title: "All voice menu",
                                  desc: "Unlock every system voice in the voice menu.")
-                }
-
-                Toggle(isOn: $features.usePremiumKey) {
-                    featureLabel(title: "Other API Key",
-                                 desc: "Switch to key 2, key 1 turns off automatically.")
                 }
 
                 VStack(alignment: .leading, spacing: 8) {

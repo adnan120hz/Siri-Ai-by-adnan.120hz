@@ -22,7 +22,6 @@ jobs:
       - name: Generate Secrets.swift
         env:
           GEMINI_API_KEY_FREE: ${{ secrets.GEMINI_API_KEY_FREE }}
-          GEMINI_API_KEY_PREMIUM: ${{ secrets.GEMINI_API_KEY_PREMIUM }}
           REDEEM_SECRET: ${{ secrets.REDEEM_SECRET }}
         run: python3 scripts/generate_secrets.py --strict
 

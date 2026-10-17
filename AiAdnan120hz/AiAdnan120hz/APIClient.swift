@@ -11,9 +11,8 @@ enum GeminiError: LocalizedError {
     case unauthorized
     /// 429: kuota habis. Sinyal khusus ke UI, jangan retry otomatis.
     case quotaExceeded
-    /// 404: model tidak ada / key tidak punya akses. Pemanggil boleh coba model fallback.
-    /// `usingPremiumKey` = true → pesan error menunjuk ke key premium (bukan key 1).
-    case modelNotFound(usingPremiumKey: Bool = false)
+    /// 404: model tidak ada. Pemanggil boleh coba model fallback.
+    case modelNotFound
     /// Error jaringan transient. Transport sudah retry 1x; ini hasil akhirnya.
     case network(Error)
     /// Respons tak bisa dibaca / status lain.
@@ -25,10 +24,7 @@ enum GeminiError: LocalizedError {
             return "API key ditolak (401/403). Cek key di GitHub Secrets lalu rebuild."
         case .quotaExceeded:
             return "Kuota Gemini habis (429). Coba lagi nanti."
-        case .modelNotFound(let usingPremiumKey):
-            if usingPremiumKey {
-                return "Key premium bermasalah (404). Cek GEMINI_API_KEY_PREMIUM di GitHub Secrets — pastikan key baru yang valid dari AI Studio, lalu rebuild."
-            }
+        case .modelNotFound:
             return "Model tidak tersedia (404)."
         case .network(let e):
             return "Jaringan: \(e.localizedDescription)"
@@ -115,29 +111,23 @@ enum GeminiClient {
 
     // MARK: - Public API
 
-    /// Kirim prompt teks. `usePremiumKey=false` → Secrets.geminiFreeKey,
-    /// `true` → Secrets.geminiPremiumKey. Mengembalikan teks jawaban polos.
+    /// Kirim prompt teks. Selalu pakai SATU key tanam (Secrets.geminiFreeKey).
+    /// Mengembalikan teks jawaban polos.
     /// `history`: riwayat [(role, text)] — role "user"/"assistant"/"model".
     /// Model utama dicoba dulu; kalau 404 → coba model fallback sekali.
     static func sendText(_ prompt: String,
                          history: [(role: String, text: String)] = [],
-                         systemInstruction: String? = nil,
-                         usePremiumKey: Bool = false) async throws -> String {
-        let key = pickKey(usePremiumKey: usePremiumKey)
+                         systemInstruction: String? = nil) async throws -> String {
+        let key = Secrets.geminiFreeKey
         guard !key.isEmpty else { throw GeminiError.unauthorized }
         let sys = systemInstruction.map { SystemInstruction(parts: [Part(text: $0, inlineData: nil)]) }
         var contents = history.map { Content(role: geminiRole($0.role), parts: [Part(text: $0.text, inlineData: nil)]) }
         contents.append(Content(role: "user", parts: [Part(text: prompt, inlineData: nil)]))
         do {
-            do {
-                return try await requestOnce(key: key, model: primaryModel, contents: contents, systemInstruction: sys)
-            } catch GeminiError.modelNotFound {
-                // 404 → fallback model sekali, lalu selesai (sukses atau error final).
-                return try await requestOnce(key: key, model: fallbackModel, contents: contents, systemInstruction: sys)
-            }
+            return try await requestOnce(key: key, model: primaryModel, contents: contents, systemInstruction: sys)
         } catch GeminiError.modelNotFound {
-            // Kedua model 404 → tandai key yang dipakai supaya pesan error tepat sasaran.
-            throw GeminiError.modelNotFound(usingPremiumKey: usePremiumKey)
+            // 404 → fallback model sekali, lalu selesai (sukses atau error final).
+            return try await requestOnce(key: key, model: fallbackModel, contents: contents, systemInstruction: sys)
         }
     }
 
@@ -147,9 +137,8 @@ enum GeminiClient {
     static func sendWithImages(_ prompt: String,
                                images: [(data: Data, mimeType: String)],
                                history: [(role: String, text: String)] = [],
-                               systemInstruction: String? = nil,
-                               usePremiumKey: Bool = false) async throws -> String {
-        let key = pickKey(usePremiumKey: usePremiumKey)
+                               systemInstruction: String? = nil) async throws -> String {
+        let key = Secrets.geminiFreeKey
         guard !key.isEmpty else { throw GeminiError.unauthorized }
         let sys = systemInstruction.map { SystemInstruction(parts: [Part(text: $0, inlineData: nil)]) }
         var contents = history.map { Content(role: geminiRole($0.role), parts: [Part(text: $0.text, inlineData: nil)]) }
@@ -161,13 +150,9 @@ enum GeminiClient {
         }
         contents.append(Content(role: "user", parts: parts))
         do {
-            do {
-                return try await requestOnce(key: key, model: primaryModel, contents: contents, systemInstruction: sys)
-            } catch GeminiError.modelNotFound {
-                return try await requestOnce(key: key, model: fallbackModel, contents: contents, systemInstruction: sys)
-            }
+            return try await requestOnce(key: key, model: primaryModel, contents: contents, systemInstruction: sys)
         } catch GeminiError.modelNotFound {
-            throw GeminiError.modelNotFound(usingPremiumKey: usePremiumKey)
+            return try await requestOnce(key: key, model: fallbackModel, contents: contents, systemInstruction: sys)
         }
     }
 
@@ -177,11 +162,6 @@ enum GeminiClient {
     }
 
     // MARK: - Internal
-
-    /// Pilih key TANAM. TIDAK ADA validasi format/panjang — cukup cek kosong.
-    private static func pickKey(usePremiumKey: Bool) -> String {
-        usePremiumKey ? Secrets.geminiPremiumKey : Secrets.geminiFreeKey
-    }
 
     /// Satu request HTTP. Retry 1x HANYA untuk network error transient.
     /// 401/403/429/404 TIDAK di-retry — langsung jadi GeminiError bertipe.
@@ -217,7 +197,7 @@ enum GeminiClient {
         case 401, 403:
             throw GeminiError.unauthorized
         case 404:
-            throw GeminiError.modelNotFound()
+            throw GeminiError.modelNotFound
         case 429:
             throw GeminiError.quotaExceeded
         default:
@@ -232,7 +212,7 @@ enum GeminiClient {
                 switch apiErr.status {
                 case "UNAUTHENTICATED", "PERMISSION_DENIED": throw GeminiError.unauthorized
                 case "RESOURCE_EXHAUSTED": throw GeminiError.quotaExceeded
-                case "NOT_FOUND": throw GeminiError.modelNotFound()
+                case "NOT_FOUND": throw GeminiError.modelNotFound
                 default: throw GeminiError.invalidResponse(apiErr.message ?? "error tak dikenal")
                 }
             }
