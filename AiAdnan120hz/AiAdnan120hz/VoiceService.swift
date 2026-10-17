@@ -76,8 +76,7 @@ enum VoiceLanguage: String, CaseIterable, Identifiable {
 
 @MainActor
 final class VoiceService: ObservableObject {
-    /// Instance bersama — toggle (mis. voiceReplyEnabled) yang diubah di satu
-    /// view langsung terlihat di view lain. Semua state tetap persist ke UserDefaults.
+    /// Instance bersama — semua state tetap persist ke UserDefaults.
     static let shared = VoiceService()
 
     private enum Phase { case idle, preparing, recording, transcribing }
@@ -102,13 +101,6 @@ final class VoiceService: ObservableObject {
         didSet { UserDefaults.standard.set(selectedVoiceIdentifier, forKey: Self.selectedVoiceKey) }
     }
 
-    /// Toggle "Voice reply" — balasan AI dibacakan dengan suara. Default MATI,
-    /// user wajib aktifkan manual. Hanya berlaku untuk premium; free selalu
-    /// diam (dicek di speakReply). Tersimpan di UserDefaults.
-    @Published var voiceReplyEnabled: Bool = UserDefaults.standard.bool(forKey: "siri.tts.voiceReplyEnabled") {
-        didSet { UserDefaults.standard.set(voiceReplyEnabled, forKey: Self.voiceReplyKey) }
-    }
-
     /// Kecepatan bicara (0.5 = lambat, 1.5 = cepat). Diatur via slider.
     @Published var speechRate: Float = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0 {
         didSet { UserDefaults.standard.set(speechRate, forKey: "speechRate") }
@@ -125,7 +117,6 @@ final class VoiceService: ObservableObject {
     private var preparingToken = UUID()
 
     private static let selectedVoiceKey = "siri.tts.voiceIdentifier"
-    private static let voiceReplyKey = "siri.tts.voiceReplyEnabled"
 
     private var recognizer: SFSpeechRecognizer?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -382,13 +373,29 @@ final class VoiceService: ObservableObject {
         synthesizer.speak(utterance)
     }
 
-    /// Balasan AI dengan voice-reply gating (disengaja oleh user):
-    /// - Free  → selalu diam (teks saja), apa pun toggle-nya.
-    /// - Premium tapi toggle "Voice reply" MATI → diam.
-    /// - Premium + toggle ON → dibacakan dengan speak().
-    func speakReply(_ text: String) {
-        guard PremiumState.shared.isPremium else { return }
-        guard voiceReplyEnabled else { return }
+    /// Preview kombinasi model (robot/cowok/cewek) + bahasa untuk quick-pick
+    /// free tier. Pakai resolveVoice yang sama dengan speak().
+    func previewModel(_ model: VoiceModel, language: VoiceLanguage) {
+        stopSpeaking()
+        guard let v = Self.resolveVoice(language: language, model: model) else { return }
+        let sample = language.sampleText
+        preparePlaybackSession()
+        let utterance = AVSpeechUtterance(string: sample)
+        utterance.voice = v
+        let expressivity = UserDefaults.standard.object(forKey: "expressivity") as? Float ?? 0.5
+        let offset = (expressivity - 0.5) * 0.6
+        utterance.pitchMultiplier = min(2.0, max(0.5, model.pitch(for: language) + offset))
+        let rate = UserDefaults.standard.object(forKey: "speechRate") as? Float ?? 1.0
+        utterance.rate = rate * model.rateMultiplier * AVSpeechUtteranceDefaultSpeechRate
+        synthesizer.speak(utterance)
+    }
+
+    /// Aturan voice reply (user 2026-10-17) — deterministik, tanpa tier gate:
+    /// - Pesan user via VOICE → balasan SELALU dibacakan (free & premium).
+    /// - Pesan user via TEKS → dibacakan HANYA kalau `textReplyAllowed`
+    ///   ("Read AI responses aloud" di Settings) ON.
+    func speakReply(_ text: String, fromVoiceInput: Bool, textReplyAllowed: Bool) {
+        guard fromVoiceInput || textReplyAllowed else { return }
         speak(text)
     }
 

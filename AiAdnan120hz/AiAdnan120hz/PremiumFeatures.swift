@@ -9,6 +9,7 @@
 // Penyimpanan:
 // - fileReadingEnabled : UserDefaults key "siri.premium.fileReading"
 // - usePremiumKey ("Other API Key") : UserDefaults key "siri.premium.usePremiumKey"
+// - allVoicesEnabled ("All voice menu") : UserDefaults key "siri.premium.allVoices"
 
 import SwiftUI
 
@@ -24,9 +25,13 @@ final class PremiumFeatures: ObservableObject {
     @Published var usePremiumKey: Bool = UserDefaults.standard.object(forKey: "siri.premium.usePremiumKey") as? Bool ?? false {
         didSet { UserDefaults.standard.set(usePremiumKey, forKey: Self.usePremiumKeyKey) }
     }
+    @Published var allVoicesEnabled: Bool = UserDefaults.standard.object(forKey: "siri.premium.allVoices") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(allVoicesEnabled, forKey: Self.allVoicesKey) }
+    }
 
     private static let fileReadingKey = "siri.premium.fileReading"
     private static let usePremiumKeyKey = "siri.premium.usePremiumKey"
+    private static let allVoicesKey = "siri.premium.allVoices"
 
     private init() {}
 }
