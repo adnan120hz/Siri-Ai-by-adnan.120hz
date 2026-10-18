@@ -48,10 +48,12 @@ enum GroqClient {
     /// Also used by GitHubClient.
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
-    /// Primary and fallback chat models.
-    static let primaryModel = "llama-3.3-70b-versatile"
-    static let fallbackModel = "llama-3.1-8b-instant"
+    /// Primary and fallback chat models (free Developer plan).
+    static let primaryModel = "openai/gpt-oss-120b"
+    static let fallbackModel = "openai/gpt-oss-20b"
     /// Vision model for sendWithImages (OpenAI image_url format).
+    /// NOTE: Groq free tier currently lists no vision model; this ID is kept
+    /// so image input works again if Groq re-adds one. A 404 surfaces honestly.
     static let visionModel = "meta-llama/llama-4-scout-17b-16e-instruct"
 
     private static let endpoint = "https://api.groq.com/openai/v1/chat/completions"
