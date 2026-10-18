@@ -1,53 +1,49 @@
-# Siri Ai
+# Siri AI by Adnan.120hz
 
-![Build IPA](https://github.com/adnan120hz/Adnan.120hz-Ai/actions/workflows/build.yml/badge.svg)
+<p align="center">
+  <img src="icon-source/siri-icon.jpg" alt="Siri AI icon" width="160" />
+</p>
 
-Aplikasi chat AI untuk iOS ala Siri, ditenagai API key [apinex.bond](https://apinex.bond) atau [NVIDIA NIM](https://build.nvidia.com) milikmu sendiri.
-Tanpa akun, tanpa login — cukup isi satu provider, key disimpan di Keychain HP.
+An AI chat application for iOS, designed in the spirit of Siri. No account required, no login necessary. Simply open the application and begin conversing.
 
-## Fitur
+## Overview
 
-- **Chat AI** — pilih model dari daftar `GET /v1/models` apinex.bond, kirim chat ke `/v1/chat/completions` (streaming SSE + fallback non-streaming). Error HTTP + body API ditampilkan apa adanya.
-- **Riwayat obrolan** — banyak percakapan, tersimpan lokal (SwiftData).
-- **Import Source** — lampirkan txt/md/pdf; teksnya diekstrak dan dimasukkan ke konteks chat.
-- **Mode Suara** — loop STT → AI → TTS on-device (Speech + AVSpeechSynthesizer). Bukan realtime duplex.
-- **Foto/Video** — foto dikirim sebagai `image_url` (vision); video diekstrak maks. 4 frame. Kalau model tidak support vision, error API ditampilkan apa adanya.
-- **Ingatan AI (lokal)** — fakta tentangmu diekstrak otomatis + ringkasan rolling, 100% di HP (bukan cloud). Bisa dimatikan & dihapus.
-- **Kuota 25 GB** — pemakaian penyimpanan lokal ditampilkan di Pengaturan, peringatan di 90%.
-- **Ganti icon** — 3 icon bawaan (Utama Navy, Hitam Swiss, Krem Editorial) via alternate icons iOS.
+Siri AI is a native iOS chat application powered by Groq's high-speed AI inference. It delivers concise, intelligent responses in a clean and familiar conversational interface.
 
-## API key
+## Features
 
-1. Buka aplikasi → tempel API key apinex.bond → Simpan.
-2. Key hanya ada di Keychain (`kSecClassGenericPassword`, `WhenUnlockedThisDeviceOnly`).
-3. Key tidak pernah di-hardcode di repo ini, tidak di-log, dan hanya dikirim sebagai `Authorization: Bearer` ke `api.apinex.bond`.
+- **AI Chat** — natural conversations with a fast, capable language model.
+- **Conversation History** — multiple conversations stored locally on your device (SwiftData). Search and revisit past chats at any time.
+- **Source Import** — attach documents (PDF, ZIP) and have their contents extracted into the chat context.
+- **Voice Mode** — speak to the AI and hear spoken responses (on-device speech recognition and text-to-speech).
+- **Photo & Video** — send images for visual understanding; video frames are extracted automatically.
+- **Local Memory** — the AI learns facts about you over time, stored entirely on your device. Fully optional and erasable.
+- **Prompt Modes** (Premium) — Gaul, Formal, Santai, and Custom speaking styles.
+- **Voice Selection** — multiple system voices, with an extended voice menu for Premium users.
+
+## AI Quota
+
+The application includes a daily AI usage quota. **Your quota refreshes automatically every day** — no manual action is required. If you reach the daily limit, simply wait until the next day, or upgrade to Premium for a higher allowance.
+
+## Important Notice
+
+**This application will expire on January 16, 2027.** After this date, the application will no longer function. Please plan accordingly.
+
+## Installation
+
+The unsigned IPA is available under [Releases](../../releases). Install via sideloading (Sideloadly, AltStore, or TrollStore) and sign with your own certificate.
 
 ## Build
 
-Push ke `main` (atau manual dispatch) menjalankan GitHub Actions (`macos-26`, Xcode 26):
-archive unsigned → `AiAdnan120hz-unsigned.ipa` sebagai artifact.
+Pushing to `main` triggers GitHub Actions (macOS, Xcode 26), producing an unsigned IPA as a build artifact. API keys are injected at build time from GitHub Secrets and are never committed to this repository.
 
-IPA unsigned: install via sideload (Sideloadly/AltStore/TrollStore) — resign sesuai caramu sendiri.
-Live API call hanya bisa dibuktikan di device fisik dengan API key milikmu.
+## Credits
 
-## Struktur
+Developed by **Adnan.120hz**.
 
-```
-AiAdnan120hz/
-├── AiAdnan120hz.xcodeproj/
-└── AiAdnan120hz/
-    ├── AiAdnan120hzApp.swift
-    ├── Models.swift            # SwiftData: Conversation, ChatMessage, ImageAttachment, SourceAttachment, MemoryFact
-    ├── KeychainStore.swift
-    ├── APIClient.swift         # URLSession → api.apinex.bond/v1
-    ├── ChatViewModel.swift
-    ├── SpeechService.swift     # STT + TTS
-    ├── MediaService.swift      # downscale foto, ekstraksi frame video
-    ├── SourceExtractor.swift   # txt/md/pdf → teks
-    ├── MemoryService.swift     # ingatan lokal + ringkasan
-    ├── StorageQuota.swift      # cap 25 GB
-    ├── Info.plist
-    ├── Assets.xcassets/        # AppIcon utama (Navy 120hz)
-    ├── AltIcons/               # 2 icon alternatif
-    └── Views/
-```
+- AI inference powered by [Groq](https://groq.com).
+- Contact: [t.me/adnan120hz](https://t.me/adnan120hz) · TikTok [@adnan.120hz](https://tiktok.com/@adnan.120hz)
+
+---
+
+© 2026 Adnan.120hz. All rights reserved.
