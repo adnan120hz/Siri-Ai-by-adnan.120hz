@@ -21,6 +21,17 @@ Siri AI is a native iOS chat application powered by Groq's high-speed AI inferen
 - **Prompt Modes** (Premium) — Gaul, Formal, Santai, and Custom speaking styles.
 - **Voice Selection** — multiple system voices, with an extended voice menu for Premium users.
 
+## Premium
+
+Upgrade to Premium via the Subscriptions menu in the app to unlock:
+
+- **File reading** — PDF and ZIP files read directly by the AI.
+- **Many voice options** — all real system voices, pick whichever you like.
+- **Prompt modes** — AI speaking style: Gaul, Formal, Santai, or Custom.
+- **50 GB storage** — local storage grows from 25 GB to 50 GB.
+- **Unlimited messages & topics** — no 20-message cap per chat and no daily limit.
+- **Own quota key** — uses a dedicated premium API key for higher reliability.
+
 ## AI Quota
 
 The application includes a daily AI usage quota. **Your quota refreshes automatically every day** — no manual action is required. If you reach the daily limit, simply wait until the next day, or upgrade to Premium for a higher allowance.
