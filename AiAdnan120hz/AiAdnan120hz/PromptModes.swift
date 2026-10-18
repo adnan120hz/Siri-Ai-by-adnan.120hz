@@ -21,7 +21,7 @@ enum PromptMode: String, Codable, CaseIterable {
     case santai
     case custom
 
-    /// Nama tampilan untuk UI (Bahasa Indonesia).
+    /// Display name for the UI (kept as-is; these are feature names).
     var displayName: String {
         switch self {
         case .gaul: return "Gaul"
@@ -31,19 +31,19 @@ enum PromptMode: String, Codable, CaseIterable {
         }
     }
 
-    /// Instruksi sistem untuk gaya bicara mode ini (Bahasa Indonesia).
+    /// System instruction for this mode's speaking style (English).
     ///
-    /// Agen integrasi menggabungkan nilai ini ke `systemInstruction` yang
-    /// dikirim ke `GeminiClient.sendText(...)`. String kosong = tidak ada
-    /// tambahan; instruksi dasar Siri tetap berlaku.
+    /// The integration layer merges this into the `systemInstruction` sent
+    /// to `GroqClient.sendText(...)`. Empty string = no extra instruction;
+    /// the base Siri instruction still applies.
     func systemInstruction() -> String {
         switch self {
         case .gaul:
-            return "Bicaralah dengan gaya gaul yang santai dan natural: pakai bahasa sehari-hari Indonesia seperti dipakai anak muda, tapi tetap jelas dan mudah dipahami. Jangan lebay atau alay. Tetap ikuti aturan panjang jawaban dasar."
+            return "Speak in a casual, natural slang style: use everyday Indonesian like young people do, but stay clear and easy to understand. Don't overdo it. Still follow the base answer-length rules."
         case .formal:
-            return "Bicaralah dengan gaya formal yang baku dan sopan: gunakan bahasa Indonesia yang baik dan benar, susunan kalimat rapi, nada profesional. Tetap ikuti aturan panjang jawaban dasar."
+            return "Speak in a standard, polite formal style: use proper, correct Indonesian with neat sentence structure and a professional tone. Still follow the base answer-length rules."
         case .santai:
-            return "Bicaralah dengan gaya santai yang hangat dan ringan: ramah, tidak kaku, seperti ngobrol dengan teman akrab, tapi jangan sampai nyablak atau asal. Tetap ikuti aturan panjang jawaban dasar."
+            return "Speak in a warm, light, relaxed style: friendly, not stiff, like chatting with a close friend, but don't get crude or sloppy. Still follow the base answer-length rules."
         case .custom:
             // Teks custom user; kosong = tidak ada tambahan (fallback ke "" dan dokumentasikan di bawah).
             return PromptMode.customText

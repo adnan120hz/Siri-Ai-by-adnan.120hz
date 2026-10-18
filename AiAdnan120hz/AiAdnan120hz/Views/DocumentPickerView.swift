@@ -54,7 +54,7 @@ struct DocumentPickerView: UIViewControllerRepresentable {
             }
             let ext = url.pathExtension.lowercased()
             guard DocumentPickerView.supportedExtensions.contains(ext) else {
-                parent.onUnsupportedType(ext.isEmpty ? "(tanpa ekstensi)" : ".\(ext)")
+                parent.onUnsupportedType(ext.isEmpty ? "(no extension)" : ".\(ext)")
                 return
             }
             parent.onPick(url)

@@ -15,7 +15,7 @@ enum FileKind: String {
 
 /// Hasil ekstraksi satu file. Untuk gambar (kind == .image), teks TIDAK
 /// diekstrak lokal — `imageData`/`imageMimeType` diteruskan ke
-/// `GeminiClient.sendWithImages` oleh lapisan integrasi.
+/// `GroqClient.sendWithImages` oleh lapisan integrasi.
 struct ExtractedFile {
     let fileName: String
     let kind: FileKind
@@ -52,19 +52,19 @@ enum FileImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .cannotAccessFile(let name):
-            return "File '\(name)' tidak bisa diakses. Coba pilih ulang file-nya."
+            return "File '\(name)' cannot be accessed. Try selecting the file again."
         case .fileTooLarge(let detail):
             return "File terlalu besar: \(detail)."
         case .unsupportedType(let ext):
-            return "Tipe file '.\(ext)' belum didukung. Yang didukung: pdf, jpg, jpeg, png, zip, ipa, apk, raw, cr2, nef, dng, arw."
+            return "File type '.\(ext)' is not supported. Supported: pdf, jpg, jpeg, png, zip, ipa, apk, raw, cr2, nef, dng, arw."
         case .pdfUnreadable(let detail):
-            return "PDF tidak bisa dibaca. \(detail)"
+            return "PDF could not be read. \(detail)"
         case .imageUnreadable(let detail):
-            return "Gambar tidak bisa dibaca. \(detail)"
+            return "Image could not be read. \(detail)"
         case .archiveUnreadable(let detail):
-            return "Arsip tidak bisa dibaca. \(detail)"
+            return "Archive could not be read. \(detail)"
         case .rawUnreadable(let detail):
-            return "File RAW tidak bisa dibaca. \(detail)"
+            return "RAW file could not be read. \(detail)"
         }
     }
 }
@@ -119,7 +119,7 @@ struct FileImportService {
     }
 
     private func formatBytes(_ n: Int) -> String {
-        if n < 0 { return "tidak diketahui" }
+        if n < 0 { return "unknown" }
         if n < 1024 { return "\(n) byte" }
         if n < 1024 * 1024 { return String(format: "%.1f KB", Double(n) / 1024.0) }
         return String(format: "%.1f MB", Double(n) / 1048576.0)
@@ -142,7 +142,7 @@ struct FileImportService {
             throw FileImportError.fileTooLarge("PDF '\(fileName)' (\(formatBytes(size))) melebihi batas 50 MB")
         }
         guard let doc = PDFDocument(url: url), doc.pageCount > 0 else {
-            throw FileImportError.pdfUnreadable("File '\(fileName)' tidak bisa dibuka atau tidak punya halaman.")
+            throw FileImportError.pdfUnreadable("File '\(fileName)' could not be opened or has no pages.")
         }
 
         var parts: [String] = []
@@ -167,7 +167,7 @@ struct FileImportService {
         let sizeText = formatBytes(size)
         var meta = "Tipe: PDF • \(doc.pageCount) halaman • \(sizeText)"
         if doc.pageCount > maxPDFPages {
-            meta += "\nCatatan: teks dipotong — hanya \(maxPDFPages) halaman pertama dari \(doc.pageCount) halaman yang dibaca."
+            meta += "\nNote: text truncated — only the first \(maxPDFPages) of \(doc.pageCount) pages were read."
         }
         if hitCharCap {
             meta += "\nCatatan: teks dipotong pada 100 KB."
@@ -208,14 +208,14 @@ private extension FileImportService {
         do {
             data = try Data(contentsOf: url)
         } catch {
-            throw FileImportError.archiveUnreadable("Gagal membaca '\(fileName)': \(error.localizedDescription)")
+            throw FileImportError.archiveUnreadable("Failed to read '\(fileName)': \(error.localizedDescription)")
         }
 
         let entries: [ZipEntry]
         do {
             entries = try ZipReader.centralDirectory(in: data)
         } catch let e as ZipError {
-            throw FileImportError.archiveUnreadable("File '\(fileName)' bukan arsip ZIP yang valid: \(e.message)")
+            throw FileImportError.archiveUnreadable("File '\(fileName)' is not a valid ZIP archive: \(e.message)")
         }
 
         let isIPA = ext == "ipa"
@@ -233,7 +233,7 @@ private extension FileImportService {
         var notes: [String] = []
         let encryptedCount = entries.filter { $0.isEncrypted }.count
         if encryptedCount > 0 {
-            notes.append("\(encryptedCount) entri terenkripsi (password) dilewati — tidak didukung.")
+            notes.append("\(encryptedCount) encrypted (password-protected) entries skipped — not supported.")
         }
 
         // --- Khusus IPA: parse Payload/*.app/Info.plist ---
@@ -250,18 +250,18 @@ private extension FileImportService {
                         let ver = dict["CFBundleShortVersionString"] as? String ?? "-"
                         let build = dict["CFBundleVersion"] as? String ?? "-"
                         lines.append("")
-                        lines.append("Info aplikasi (dari \(infoEntry.name)):")
+                        lines.append("App info (from \(infoEntry.name)):")
                         lines.append("- Nama: \(name)")
                         lines.append("- Bundle ID: \(bid)")
                         lines.append("- Versi: \(ver) (build \(build))")
                     } else {
-                        notes.append("Info.plist ditemukan tapi bukan dictionary — tidak bisa dibaca key-nya.")
+                        notes.append("Info.plist found but is not a dictionary — cannot read its keys.")
                     }
                 } catch {
-                    notes.append("Info.plist ditemukan di \(infoEntry.name) tapi gagal dibaca: \(error.localizedDescription)")
+                    notes.append("Info.plist found in \(infoEntry.name) but could not be read: \(error.localizedDescription)")
                 }
             } else {
-                notes.append("Payload/*.app/Info.plist tidak ditemukan di arsip ini.")
+                notes.append("Payload/*.app/Info.plist not found in this archive.")
             }
         }
 
@@ -271,12 +271,12 @@ private extension FileImportService {
                 let bytes = try ZipReader.extract(entry: manifest, from: data)
                 let strings = printableStrings(from: bytes, maxStrings: 400)
                 lines.append("")
-                lines.append("AndroidManifest.xml — CATATAN JUJUR: file ini adalah binary XML (AXML), "
-                    + "bukan XML teks. Parser AXML penuh tidak tersedia di sini, jadi TIDAK diklaim "
-                    + "terbaca penuh. Di bawah ini hanya string printable (best-effort, \(strings.count) string):")
+                lines.append("AndroidManifest.xml — HONEST NOTE: this file is binary XML (AXML), "
+                    + "not text XML. A full AXML parser is not available here, so it is NOT claimed "
+                    + "to be fully readable. Below are only printable strings (best-effort, \(strings.count) strings):")
                 lines.append(strings.joined(separator: "\n"))
             } catch {
-                notes.append("AndroidManifest.xml gagal diekstrak: \(error.localizedDescription)")
+                notes.append("AndroidManifest.xml could not be extracted: \(error.localizedDescription)")
             }
         }
 
@@ -305,14 +305,14 @@ private extension FileImportService {
                 lines.append(shown)
                 extractedCount += 1
             } catch {
-                notes.append("Gagal mengekstrak '\(e.name)': \(error.localizedDescription)")
+                notes.append("Failed to extract '\(e.name)': \(error.localizedDescription)")
             }
         }
         if textCandidates.count > maxTextFiles {
-            notes.append("Hanya \(maxTextFiles) file teks pertama yang ditampilkan dari \(textCandidates.count) file teks.")
+            notes.append("Only the first \(maxTextFiles) of \(textCandidates.count) text files are shown.")
         }
         if extractedCount == 0 && !isIPA && !isAPK {
-            notes.append("Tidak ada file teks yang bisa diekstrak dari arsip ini.")
+            notes.append("No text files could be extracted from this archive.")
         }
 
         var meta = "Tipe: \(kindLabel) • \(entries.count) entri • \(formatBytes(size))"
@@ -372,7 +372,7 @@ private enum ZipError: LocalizedError {
 
     var message: String {
         switch self {
-        case .notAZip: return "signature ZIP tidak ditemukan."
+        case .notAZip: return "ZIP signature not found."
         case .corrupt(let d): return "struktur arsip rusak (\(d))."
         case .unsupported(let d): return d
         }
@@ -449,10 +449,10 @@ private enum ZipReader {
         // Tolak eksplisit arsip multi-disk (spanned): offset central directory
         // di EOCD merujuk ke disk lain, jadi parse single-file tidak valid.
         if diskNumber != 0 || cdDisk != 0 || entriesThisDisk != totalEntries {
-            throw ZipError.unsupported("arsip multi-disk (spanned) tidak didukung")
+            throw ZipError.unsupported("multi-disk (spanned) archives not supported")
         }
         if totalEntries > maxEntries {
-            throw ZipError.corrupt("jumlah entri tidak wajar (\(totalEntries))")
+            throw ZipError.corrupt("unreasonable entry count (\(totalEntries))")
         }
         let cdOff = Int(cdOffset)
         guard cdOff >= 0, cdOff + Int(cdSize) <= data.count else {
@@ -465,7 +465,7 @@ private enum ZipReader {
             guard pos + 46 <= data.count,
                   data[pos] == 0x50, data[pos + 1] == 0x4B,
                   data[pos + 2] == 0x01, data[pos + 3] == 0x02 else {
-                throw ZipError.corrupt("header central directory tidak valid di offset \(pos)")
+                throw ZipError.corrupt("invalid central directory header at offset \(pos)")
             }
             guard let flags = u16(data, pos + 8),
                   let method = u16(data, pos + 10),
@@ -483,7 +483,7 @@ private enum ZipReader {
             }
             // ZIP64 (nilai 0xFFFF/0xFFFFFFFF) belum didukung — jujur, bukan dikarang.
             if compSize32 == 0xFFFF_FFFF || uncompSize32 == 0xFFFF_FFFF || localOff32 == 0xFFFF_FFFF {
-                throw ZipError.unsupported("arsip memakai ekstensi ZIP64 yang belum didukung")
+                throw ZipError.unsupported("archive uses ZIP64 extensions, not yet supported")
             }
             let nameStart = pos + 46
             let nameEnd = nameStart + Int(nameLen)
@@ -495,7 +495,7 @@ private enum ZipReader {
             if flags & 0x0800 != 0 {
                 // Bit 11 = nama UTF-8.
                 guard let s = String(bytes: nameBytes, encoding: .utf8) else {
-                    throw ZipError.corrupt("nama entri bukan UTF-8 valid")
+                    throw ZipError.corrupt("entry name is not valid UTF-8")
                 }
                 name = s
             } else {
@@ -523,10 +523,10 @@ private enum ZipReader {
     /// Ekstrak bytes mentah satu entri (handle stored + deflated + verifikasi CRC32).
     static func extract(entry: ZipEntry, from data: Data) throws -> [UInt8] {
         if entry.isEncrypted {
-            throw ZipError.unsupported("entri '\(entry.name)' terenkripsi (password) — tidak didukung")
+            throw ZipError.unsupported("entry '\(entry.name)' is encrypted (password) — not supported")
         }
         if entry.method != 0 && entry.method != 8 {
-            throw ZipError.unsupported("metode kompresi \(entry.method) untuk '\(entry.name)' tidak didukung (hanya stored/deflated)")
+            throw ZipError.unsupported("compression method \(entry.method) for '\(entry.name)' not supported (only stored/deflated)")
         }
         if entry.uncompressedSize > zipMaxInflateBytes {
             throw ZipError.unsupported("entri '\(entry.name)' melebihi 64 MB hasil ekstraksi")
@@ -539,7 +539,7 @@ private enum ZipReader {
               data[loff + 2] == 0x03, data[loff + 3] == 0x04,
               let nameLen = u16(data, loff + 26),
               let extraLen = u16(data, loff + 28) else {
-            throw ZipError.corrupt("local header tidak valid untuk '\(entry.name)'")
+            throw ZipError.corrupt("invalid local header for '\(entry.name)'")
         }
         let dataStart = loff + 30 + Int(nameLen) + Int(extraLen)
         let dataEnd = dataStart + Int(entry.compressedSize)
@@ -555,14 +555,14 @@ private enum ZipReader {
             do {
                 out = try RawInflate.decompress(raw, expectedSize: entry.uncompressedSize)
             } catch {
-                throw ZipError.corrupt("gagal dekompresi '\(entry.name)' (data DEFLATE tidak valid)")
+                throw ZipError.corrupt("failed to decompress '\(entry.name)' (invalid DEFLATE data)")
             }
         }
         guard UInt64(out.count) == entry.uncompressedSize else {
-            throw ZipError.corrupt("ukuran hasil '\(entry.name)' tidak sesuai header")
+            throw ZipError.corrupt("output size of '\(entry.name)' does not match header")
         }
         if crc32(out) != entry.crc32 {
-            throw ZipError.corrupt("checksum CRC32 '\(entry.name)' tidak cocok — arsip mungkin rusak")
+            throw ZipError.corrupt("CRC32 checksum of '\(entry.name)' mismatch — archive may be corrupt")
         }
         return out
     }

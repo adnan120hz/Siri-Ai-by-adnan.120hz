@@ -115,13 +115,13 @@ struct VoiceModelView: View {
             onSelect: { selectModel(.robot, language: .english) }
         )
         ModelRow(
-            title: "Cowok", subtitle: "Male voice", color: .blue,
+            title: "Male", subtitle: "Male voice", color: .blue,
             isSelected: isModelSelected(.male, language: .english),
             onPreview: { voice.previewModel(.male, language: .english) },
             onSelect: { selectModel(.male, language: .english) }
         )
         ModelRow(
-            title: "Cewek", subtitle: "Female voice", color: .pink,
+            title: "Female", subtitle: "Female voice", color: .pink,
             isSelected: isModelSelected(.female, language: .english),
             onPreview: { voice.previewModel(.female, language: .english) },
             onSelect: { selectModel(.female, language: .english) }
@@ -135,7 +135,7 @@ struct VoiceModelView: View {
             onSelect: { selectModel(.robot, language: .indonesian) }
         )
         ModelRow(
-            title: "Cewek", subtitle: "Female voice", color: .pink,
+            title: "Female", subtitle: "Female voice", color: .pink,
             isSelected: isModelSelected(.female, language: .indonesian),
             onPreview: { voice.previewModel(.female, language: .indonesian) },
             onSelect: { selectModel(.female, language: .indonesian) }
@@ -172,7 +172,7 @@ struct VoiceModelView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.5))
-                TextField("Cari suara", text: $query)
+                TextField("Search voices", text: $query)
                     .foregroundStyle(.white)
                     .autocorrectionDisabled()
             }
@@ -192,7 +192,7 @@ struct VoiceModelView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.system(size: 13, weight: .semibold))
-                        Text("Otomatis (default sistem)")
+                        Text("Automatic (system default)")
                             .font(.subheadline)
                             .fontWeight(.medium)
                     }
@@ -234,7 +234,7 @@ struct VoiceModelView: View {
             }
 
             if groupedVoices.isEmpty {
-                Text("Suara tidak ditemukan.")
+                Text("No voices found.")
                     .font(.body)
                     .foregroundStyle(.white.opacity(0.5))
                     .padding(.top, 24)
@@ -310,7 +310,7 @@ private struct ModelRow: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(isSelected ? "Suara terpilih" : "Pilih suara \(title)"))
+            .accessibilityLabel(Text(isSelected ? "Selected voice" : "Select voice \(title)"))
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 9)
@@ -369,7 +369,7 @@ private struct SystemVoiceRow: View {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(isSelected ? "Suara terpilih" : "Pilih suara \(name)"))
+            .accessibilityLabel(Text(isSelected ? "Selected voice" : "Select voice \(name)"))
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 9)

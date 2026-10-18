@@ -6,8 +6,8 @@ Cara pakai:
     python3 scripts/generate_secrets.py --strict   # CI: env kosong -> exit 1
 
 Environment variables yang dibaca:
-    GEMINI_API_KEY_FREE
-    GEMINI_API_KEY_PREMIUM
+    GEMINI_API_KEY_FREE       # NAMA env dipertahankan; nilainya kini key GROQ
+    GEMINI_API_KEY_PREMIUM    # NAMA env dipertahankan; nilainya kini key GROQ
     REDEEM_SECRET
 
 ATURAN: script ini TIDAK PERNAH mencetak nilai secret ke stdout/log.
@@ -25,9 +25,11 @@ OUTPUT_PATH = os.path.join(
 )
 
 # (nama env, nama properti Swift, nilai dummy lokal)
+# CATATAN: nama env GEMINI_* dipertahankan (user sudah mengisi nilainya
+# dengan key Groq); nama properti Swift diganti agar jelas ini key Groq.
 SECRETS = [
-    ("GEMINI_API_KEY_FREE", "geminiFreeKey", "DUMMY_FREE_KEY"),
-    ("GEMINI_API_KEY_PREMIUM", "geminiPremiumKey", "DUMMY_PREMIUM_KEY"),
+    ("GEMINI_API_KEY_FREE", "groqFreeKey", "DUMMY_FREE_KEY"),
+    ("GEMINI_API_KEY_PREMIUM", "groqPremiumKey", "DUMMY_PREMIUM_KEY"),
     ("REDEEM_SECRET", "redeemSecret", "DUMMY_REDEEM_SECRET"),
 ]
 

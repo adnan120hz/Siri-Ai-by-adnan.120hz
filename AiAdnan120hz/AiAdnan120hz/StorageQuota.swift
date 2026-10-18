@@ -14,7 +14,7 @@ enum StorageQuota {
     static var warnThreshold: Double { 0.9 }
 
     /// Pesan blokir storage (verbatim kontrak).
-    static let fullMessage = "Penyimpanan penuh (batas 25GB/50GB). Hapus data lama atau upgrade ke premium."
+    static let fullMessage = "Storage full (25GB/50GB limit). Delete old data or upgrade to premium."
 
     /// Proyeksi: True kalau `additionalBytes` masih muat di bawah cap
     /// (usedBytes + additional ≤ cap).

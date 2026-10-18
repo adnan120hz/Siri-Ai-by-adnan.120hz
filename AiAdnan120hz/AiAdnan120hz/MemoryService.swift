@@ -23,11 +23,11 @@ enum MemoryService {
                 sortBy: [SortDescriptor(\.createdAt)]))) ?? []
             if !facts.isEmpty {
                 let lines = facts.map { "- \($0.fact)" }.joined(separator: "\n")
-                parts.append("Fakta tentang pengguna (ingatan lokal, bisa salah — jangan diumbar):\n\(lines)")
+                parts.append("Facts about the user (local memory, may be wrong — do not reveal):\n\(lines)")
             }
         }
         if !conversation.summary.isEmpty {
-            parts.append("Ringkasan obrolan sebelumnya:\n\(conversation.summary)")
+            parts.append("Previous chat summary:\n\(conversation.summary)")
         }
         return parts.joined(separator: "\n\n")
     }
@@ -40,14 +40,14 @@ enum MemoryService {
                                   context: ModelContext) async {
         guard userText.count > 20 else { return }
         let prompt = """
-        Dari percakapan ini, ekstrak maksimal 3 fakta TENTANG PENGGUNA yang layak diingat jangka panjang \
-        (nama, preferensi, pekerjaan, hal penting). Abaikan fakta tentang topik umum. \
-        Jawab HANYA sebagai JSON array of string, mis. ["..."]. Kalau tidak ada, jawab [].
-        Pengguna: \(userText.prefix(1500))
-        Asisten: \(assistantText.prefix(1500))
+        From this conversation, extract at most 3 facts ABOUT THE USER worth remembering long-term \
+        (name, preferences, job, important things). Ignore facts about general topics. \
+        Answer ONLY as a JSON array of strings, e.g. ["..."]. If none, answer [].
+        User: \(userText.prefix(1500))
+        Assistant: \(assistantText.prefix(1500))
         """
         do {
-            let raw = try await GeminiClient.sendText(prompt, usePremiumKey: useEffectivePremiumKey)
+            let raw = try await GroqClient.sendText(prompt, usePremiumKey: useEffectivePremiumKey)
             TokenUsage.record(tokens: TokenUsage.estimateTokens(for: prompt) + TokenUsage.estimateTokens(for: raw))
             guard let data = raw.data(using: .utf8),
                   let facts = try? JSONDecoder().decode([String].self, from: data),
@@ -71,9 +71,9 @@ enum MemoryService {
         guard count > 40 else { return }
         let oldest = conversation.messages.sorted { $0.createdAt < $1.createdAt }.prefix(20)
             .map { "[\($0.role)]: \($0.text.prefix(800))" }.joined(separator: "\n")
-        let prompt = "Ringkas percakapan berikut jadi 5-8 baris padat (Bahasa Indonesia):\n\(oldest)"
+        let prompt = "Summarize the following conversation into 5-8 dense lines (English):\n\(oldest)"
         do {
-            let summary = try await GeminiClient.sendText(prompt, usePremiumKey: useEffectivePremiumKey)
+            let summary = try await GroqClient.sendText(prompt, usePremiumKey: useEffectivePremiumKey)
             TokenUsage.record(tokens: TokenUsage.estimateTokens(for: prompt) + TokenUsage.estimateTokens(for: summary))
             conversation.summary = summary
             try? context.save()
@@ -85,15 +85,15 @@ enum MemoryService {
     static func generateTitle(userText: String, assistantText: String,
                               conversation: Conversation, context: ModelContext) async {
         // Hanya generate kalau judul masih default.
-        guard conversation.title == "Obrolan baru" || conversation.title == "New chat" else { return }
+        guard conversation.title == "New chat" else { return }
         let prompt = """
-        Buatkan judul singkat (maksimal 5 kata, Bahasa Indonesia, tanpa tanda kutip) untuk percakapan ini:
+        Create a short title (max 5 words, English, no quotes) for this conversation:
         User: \(userText.prefix(200))
         AI: \(assistantText.prefix(200))
-        Judul:
+        Title:
         """
         do {
-            let title = try await GeminiClient.sendText(prompt, usePremiumKey: useEffectivePremiumKey)
+            let title = try await GroqClient.sendText(prompt, usePremiumKey: useEffectivePremiumKey)
             let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: "\"", with: "")
                 .replacingOccurrences(of: "**", with: "")

@@ -13,8 +13,8 @@ enum SourceExtractor {
 
         var errorDescription: String? {
             switch self {
-            case .unreadable: return "File tidak bisa dibaca."
-            case .empty: return "File kosong / tidak ada teks yang bisa diekstrak."
+            case .unreadable: return "File could not be read."
+            case .empty: return "File is empty / no text could be extracted."
             case .tooLarge: return "File terlalu besar (batas 60 ribu karakter)."
             }
         }
@@ -50,9 +50,9 @@ enum SourceExtractor {
 
         var errorDescription: String? {
             switch self {
-            case .badURL: return "URL tidak valid."
-            case .http(let s): return "Gagal fetch (HTTP \(s))."
-            case .empty: return "Halaman kosong / tidak ada teks."
+            case .badURL: return "Invalid URL."
+            case .http(let s): return "Fetch failed (HTTP \(s))."
+            case .empty: return "Page is empty / no text."
             }
         }
     }

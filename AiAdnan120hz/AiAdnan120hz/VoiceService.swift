@@ -69,7 +69,7 @@ enum VoiceLanguage: String, CaseIterable, Identifiable {
     var sampleText: String {
         switch self {
         case .english: return "Hello, this is my voice."
-        case .indonesian: return "Halo, ini suara saya."
+        case .indonesian: return "Hello, this is my voice."
         }
     }
 }
@@ -134,7 +134,7 @@ final class VoiceService: ObservableObject {
     func requestPermissions() async -> Bool {
         // Cek cepat status saat ini — kalau sudah denied, langsung alert tanpa request ulang.
         if AVAudioSession.sharedInstance().recordPermission == .denied {
-            permissionError = "Izin mikrofon ditolak. Nyalakan di Pengaturan iPhone → Siri Ai → Mikrofon."
+            permissionError = "Microphone permission denied. Enable it in iPhone Settings → Siri Ai → Microphone."
             return false
         }
         // 1. Microphone
@@ -144,13 +144,13 @@ final class VoiceService: ObservableObject {
             }
         }
         guard micGranted else {
-            permissionError = "Izin mikrofon ditolak. Nyalakan di Pengaturan iPhone → Siri Ai → Mikrofon."
+            permissionError = "Microphone permission denied. Enable it in iPhone Settings → Siri Ai → Microphone."
             return false
         }
         // 2. Speech recognition
         if SFSpeechRecognizer.authorizationStatus() == .denied
             || SFSpeechRecognizer.authorizationStatus() == .restricted {
-            permissionError = "Speech recognition dibatasi/ditolak di perangkat ini. Cek Pengaturan iPhone → Siri Ai."
+            permissionError = "Speech recognition is restricted/denied on this device. Check iPhone Settings → Siri Ai."
             return false
         }
         let speechStatus = await withCheckedContinuation { cont in
@@ -159,7 +159,7 @@ final class VoiceService: ObservableObject {
             }
         }
         guard speechStatus == .authorized else {
-            permissionError = "Izin speech recognition ditolak. Nyalakan di Pengaturan iPhone → Siri Ai → Speech Recognition."
+            permissionError = "Speech recognition permission denied. Enable it in iPhone Settings → Siri Ai → Speech Recognition."
             return false
         }
         permissionError = nil
@@ -204,7 +204,7 @@ final class VoiceService: ObservableObject {
             recognizer = SFSpeechRecognizer()
         }
         guard let recognizer, recognizer.isAvailable else {
-            permissionError = "Speech recognizer tidak tersedia saat ini (butuh internet)."
+            permissionError = "Speech recognizer is currently unavailable (needs internet)."
             phase = .idle
             return
         }
@@ -226,7 +226,7 @@ final class VoiceService: ObservableObject {
             try session.setCategory(.playAndRecord, mode: .default, options: [.duckOthers, .defaultToSpeaker])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
-            permissionError = "Gagal menyiapkan audio: \(error.localizedDescription)"
+            permissionError = "Failed to set up audio: \(error.localizedDescription)"
             phase = .idle
             return
         }
@@ -244,14 +244,14 @@ final class VoiceService: ObservableObject {
         do {
             audioRecorder = try AVAudioRecorder(url: recordingURL, settings: settings)
         } catch {
-            permissionError = "Gagal mulai merekam: \(error.localizedDescription)"
+            permissionError = "Failed to start recording: \(error.localizedDescription)"
             deactivateSession()
             phase = .idle
             return
         }
 
         guard let recorder = audioRecorder, recorder.record() else {
-            permissionError = "Gagal mulai merekam."
+            permissionError = "Failed to start recording."
             audioRecorder = nil
             deactivateSession()
             phase = .idle
@@ -361,7 +361,7 @@ final class VoiceService: ObservableObject {
     /// kalimat contoh pendek dengan suara itu. Rate & expressivity ikut setting user.
     func previewVoice(_ v: AVSpeechSynthesisVoice) {
         stopSpeaking()
-        let sample = v.language.hasPrefix("id") ? "Halo, ini suara saya." : "Hello, this is my voice."
+        let sample = v.language.hasPrefix("id") ? "Hello, this is my voice." : "Hello, this is my voice."
         preparePlaybackSession()
         let utterance = AVSpeechUtterance(string: sample)
         utterance.voice = v

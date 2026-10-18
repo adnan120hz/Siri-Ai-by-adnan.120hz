@@ -1,251 +1,252 @@
 import Foundation
 
-// MARK: - Gemini client (Google AI Studio / Generative Language API).
-// Key TANAM saat CI (enum Secrets, di-generate dari GitHub Secrets) —
-// TIDAK PERNAH di-hardcode, tidak pernah di-log, tidak pernah via query string.
-// Key hanya dikirim lewat header `x-goog-api-key` (format key baru "AQ."
-// kena 401 palsu kalau lewat ?key=).
+// MARK: - Groq client (OpenAI-compatible: https://api.groq.com/openai/v1).
+// Key EMBEDDED at CI (enum Secrets, generated from GitHub Secrets) —
+// NEVER hardcoded, never logged, never via query string.
+// Key is sent only via `Authorization: Bearer` header.
+// NOTE: the secret env names GEMINI_API_KEY_FREE / GEMINI_API_KEY_PREMIUM are
+// kept for continuity, but their values are GROQ keys (set by the user).
 
-enum GeminiError: LocalizedError {
-    /// 401/403: key salah / tidak diizinkan. STOP — jangan retry.
+enum GroqError: LocalizedError {
+    /// 401/403: wrong key / not allowed. STOP — do not retry.
     case unauthorized
-    /// 429: kuota habis. Sinyal khusus ke UI, jangan retry otomatis.
+    /// 429: quota exhausted. Special signal to UI, do not auto-retry.
     case quotaExceeded
-    /// 404: model tidak ada / key tidak punya akses. Pemanggil boleh coba model fallback.
-    /// `usingPremiumKey` = true → pesan error menunjuk ke key premium (bukan key 1).
+    /// 404 (or 400 with "model" in body): model missing / key has no access.
+    /// Caller may try the fallback model once.
+    /// `usingPremiumKey` = true → error message points at the premium key.
     case modelNotFound(usingPremiumKey: Bool = false)
-    /// Error jaringan transient. Transport sudah retry 1x; ini hasil akhirnya.
+    /// Transient network error. Transport already retried 1x; this is final.
     case network(Error)
-    /// Respons tak bisa dibaca / status lain.
+    /// Response unreadable / other status.
     case invalidResponse(String)
 
     var errorDescription: String? {
         switch self {
         case .unauthorized:
-            return "API key ditolak (401/403). Cek key di GitHub Secrets lalu rebuild."
+            return "API key rejected (401/403). Check the key in GitHub Secrets, then rebuild."
         case .quotaExceeded:
-            return "Kuota Gemini habis (429). Coba lagi nanti."
+            return "Groq quota exceeded (429). Try again later."
         case .modelNotFound(let usingPremiumKey):
             if usingPremiumKey {
-                return "Key premium bermasalah (404). Cek GEMINI_API_KEY_PREMIUM di GitHub Secrets — pastikan key baru yang valid dari AI Studio, lalu rebuild."
+                return "Premium key problem (404). Check GEMINI_API_KEY_PREMIUM in GitHub Secrets — it holds a Groq key, make sure it is a valid new key, then rebuild."
             }
-            return "Model tidak tersedia (404)."
+            return "Model unavailable (404)."
         case .network(let e):
-            return "Jaringan: \(e.localizedDescription)"
+            return "Network: \(e.localizedDescription)"
         case .invalidResponse(let s):
             let short = s.count > 600 ? String(s.prefix(600)) + "…" : s
-            return "Respons tak valid.\n\(short)"
+            return "Invalid response.\n\(short)"
         }
     }
 }
 
 // MARK: - Client
 
-enum GeminiClient {
-    /// User-Agent browser-like: beberapa gateway/WAF menolak request tanpa UA.
-    /// Dipakai juga oleh GitHubClient.
+enum GroqClient {
+    /// Browser-like User-Agent: some gateways/WAFs reject requests without UA.
+    /// Also used by GitHubClient.
     static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
-    /// Model utama dan fallback. JANGAN pakai alias `gemini-flash-latest`.
-    static let primaryModel = "gemini-2.5-flash"
-    static let fallbackModel = "gemini-2.0-flash"
+    /// Primary and fallback chat models.
+    static let primaryModel = "llama-3.3-70b-versatile"
+    static let fallbackModel = "llama-3.1-8b-instant"
+    /// Vision model for sendWithImages (OpenAI image_url format).
+    static let visionModel = "meta-llama/llama-4-scout-17b-16e-instruct"
 
-    private static let endpoint = "https://generativelanguage.googleapis.com/v1beta/models"
+    private static let endpoint = "https://api.groq.com/openai/v1/chat/completions"
 
-    // MARK: - Payload
+    // MARK: - Payload (OpenAI chat format)
 
-    private struct Part: Encodable {
+    private struct ImageUrl: Encodable {
+        var url: String // "data:<mime>;base64,<b64>"
+    }
+
+    private struct ContentPart: Encodable {
+        var type: String // "text" | "image_url"
         var text: String?
-        var inlineData: InlineData?
+        var image_url: ImageUrl?
 
-        struct InlineData: Encodable {
-            var mimeType: String
-            var data: String // base64 murni, tanpa prefix data:
-        }
+        enum CodingKeys: String, CodingKey { case type, text, image_url }
+    }
 
-        enum CodingKeys: String, CodingKey { case text, inlineData }
+    private struct Message: Encodable {
+        var role: String // "system" | "user" | "assistant"
+        var content: Content
+    }
+
+    /// content is either a plain string or an array of parts.
+    private enum Content: Encodable {
+        case text(String)
+        case parts([ContentPart])
 
         func encode(to encoder: Encoder) throws {
-            var c = encoder.container(keyedBy: CodingKeys.self)
-            try c.encodeIfPresent(text, forKey: .text)
-            try c.encodeIfPresent(inlineData, forKey: .inlineData)
+            var c = encoder.singleValueContainer()
+            switch self {
+            case .text(let s): try c.encode(s)
+            case .parts(let p): try c.encode(p)
+            }
         }
     }
 
-    private struct Content: Encodable {
-        var role: String // "user" | "model"
-        var parts: [Part]
-    }
-
-    private struct SystemInstruction: Encodable {
-        var parts: [Part]
-    }
-
-    private struct GenerationConfig: Encodable {
-        var maxOutputTokens: Int = 2048
+    private struct ChatRequest: Encodable {
+        var model: String
+        var messages: [Message]
+        var max_tokens: Int = 2048
         var temperature: Double = 0.7
     }
 
-    private struct GenerateRequest: Encodable {
-        var contents: [Content]
-        var systemInstruction: SystemInstruction?
-        var generationConfig = GenerationConfig()
-
-        enum CodingKeys: String, CodingKey {
-            case contents, systemInstruction, generationConfig
-        }
-    }
-
-    private struct GenerateResponse: Decodable {
-        struct Candidate: Decodable {
-            struct Content: Decodable {
-                struct Part: Decodable { var text: String? }
-                var parts: [Part]?
-            }
-            var content: Content?
+    private struct ChatResponse: Decodable {
+        struct Choice: Decodable {
+            struct Message: Decodable { var content: String? }
+            var message: Message?
         }
         struct ApiError: Decodable {
-            var code: Int?
-            var status: String?
             var message: String?
+            var code: String?
         }
-        var candidates: [Candidate]?
+        var choices: [Choice]?
         var error: ApiError?
     }
 
     // MARK: - Public API
 
-    /// Kirim prompt teks. `usePremiumKey=false` → Secrets.geminiFreeKey,
-    /// `true` → Secrets.geminiPremiumKey. Mengembalikan teks jawaban polos.
-    /// `history`: riwayat [(role, text)] — role "user"/"assistant"/"model".
-    /// Model utama dicoba dulu; kalau 404 → coba model fallback sekali.
+    /// Send a text prompt. `usePremiumKey=false` → Secrets.groqFreeKey,
+    /// `true` → Secrets.groqPremiumKey. Returns plain answer text.
+    /// `history`: [(role, text)] — roles "user"/"assistant" map directly.
+    /// Primary model is tried first; on 404 → fallback model tried once.
     static func sendText(_ prompt: String,
                          history: [(role: String, text: String)] = [],
                          systemInstruction: String? = nil,
                          usePremiumKey: Bool = false) async throws -> String {
         let key = pickKey(usePremiumKey: usePremiumKey)
-        guard !key.isEmpty else { throw GeminiError.unauthorized }
-        let sys = systemInstruction.map { SystemInstruction(parts: [Part(text: $0, inlineData: nil)]) }
-        var contents = history.map { Content(role: geminiRole($0.role), parts: [Part(text: $0.text, inlineData: nil)]) }
-        contents.append(Content(role: "user", parts: [Part(text: prompt, inlineData: nil)]))
+        guard !key.isEmpty else { throw GroqError.unauthorized }
+        var messages: [Message] = []
+        if let sys = systemInstruction, !sys.isEmpty {
+            messages.append(Message(role: "system", content: .text(sys)))
+        }
+        for h in history {
+            messages.append(Message(role: h.role, content: .text(h.text)))
+        }
+        messages.append(Message(role: "user", content: .text(prompt)))
         do {
             do {
-                return try await requestOnce(key: key, model: primaryModel, contents: contents, systemInstruction: sys)
-            } catch GeminiError.modelNotFound {
-                // 404 → fallback model sekali, lalu selesai (sukses atau error final).
-                return try await requestOnce(key: key, model: fallbackModel, contents: contents, systemInstruction: sys)
+                return try await requestOnce(key: key, model: primaryModel, messages: messages)
+            } catch GroqError.modelNotFound {
+                // 404 → try fallback model once, then done (success or final error).
+                return try await requestOnce(key: key, model: fallbackModel, messages: messages)
             }
-        } catch GeminiError.modelNotFound {
-            // Kedua model 404 → tandai key yang dipakai supaya pesan error tepat sasaran.
-            throw GeminiError.modelNotFound(usingPremiumKey: usePremiumKey)
+        } catch GroqError.modelNotFound {
+            // Both models 404 → flag the key used so the message points correctly.
+            throw GroqError.modelNotFound(usingPremiumKey: usePremiumKey)
         }
     }
 
-    /// Kirim prompt + gambar (JPEG/PNG bytes). `images`: (data, mimeType),
-    /// mis. (jpegData, "image/jpeg"). Base64 di-encode di sini — panggil
-    /// dengan bytes murni, tanpa prefix `data:`.
+    /// Send prompt + images (JPEG/PNG bytes). `images`: (data, mimeType),
+    /// e.g. (jpegData, "image/jpeg"). Base64 is encoded here — pass raw
+    /// bytes, without the `data:` prefix.
     static func sendWithImages(_ prompt: String,
                                images: [(data: Data, mimeType: String)],
                                history: [(role: String, text: String)] = [],
                                systemInstruction: String? = nil,
                                usePremiumKey: Bool = false) async throws -> String {
         let key = pickKey(usePremiumKey: usePremiumKey)
-        guard !key.isEmpty else { throw GeminiError.unauthorized }
-        let sys = systemInstruction.map { SystemInstruction(parts: [Part(text: $0, inlineData: nil)]) }
-        var contents = history.map { Content(role: geminiRole($0.role), parts: [Part(text: $0.text, inlineData: nil)]) }
-        var parts: [Part] = [Part(text: prompt.isEmpty ? "Jelaskan gambar ini." : prompt, inlineData: nil)]
+        guard !key.isEmpty else { throw GroqError.unauthorized }
+        var messages: [Message] = []
+        if let sys = systemInstruction, !sys.isEmpty {
+            messages.append(Message(role: "system", content: .text(sys)))
+        }
+        for h in history {
+            messages.append(Message(role: h.role, content: .text(h.text)))
+        }
+        var parts: [ContentPart] = [
+            ContentPart(type: "text",
+                        text: prompt.isEmpty ? "Describe this image." : prompt,
+                        image_url: nil)
+        ]
         for img in images {
-            parts.append(Part(text: nil, inlineData: Part.InlineData(
-                mimeType: img.mimeType,
-                data: img.data.base64EncodedString())))
+            let dataUrl = "data:\(img.mimeType);base64,\(img.data.base64EncodedString())"
+            parts.append(ContentPart(type: "image_url", text: nil,
+                                     image_url: ImageUrl(url: dataUrl)))
         }
-        contents.append(Content(role: "user", parts: parts))
+        messages.append(Message(role: "user", content: .parts(parts)))
         do {
-            do {
-                return try await requestOnce(key: key, model: primaryModel, contents: contents, systemInstruction: sys)
-            } catch GeminiError.modelNotFound {
-                return try await requestOnce(key: key, model: fallbackModel, contents: contents, systemInstruction: sys)
-            }
-        } catch GeminiError.modelNotFound {
-            throw GeminiError.modelNotFound(usingPremiumKey: usePremiumKey)
+            return try await requestOnce(key: key, model: visionModel, messages: messages)
+        } catch GroqError.modelNotFound {
+            // Vision model missing — flag the key used so the message points correctly.
+            // (No text-model fallback: it cannot see images, so retrying would lie.)
+            throw GroqError.modelNotFound(usingPremiumKey: usePremiumKey)
         }
-    }
-
-    /// Gemini hanya kenal role "user"/"model". Petakan "assistant" → "model".
-    private static func geminiRole(_ role: String) -> String {
-        role == "assistant" ? "model" : role
     }
 
     // MARK: - Internal
 
-    /// Pilih key TANAM. TIDAK ADA validasi format/panjang — cukup cek kosong.
+    /// Pick the EMBEDDED key. NO format/length validation — just check empty.
     private static func pickKey(usePremiumKey: Bool) -> String {
-        usePremiumKey ? Secrets.geminiPremiumKey : Secrets.geminiFreeKey
+        usePremiumKey ? Secrets.groqPremiumKey : Secrets.groqFreeKey
     }
 
-    /// Satu request HTTP. Retry 1x HANYA untuk network error transient.
-    /// 401/403/429/404 TIDAK di-retry — langsung jadi GeminiError bertipe.
+    /// One HTTP request. Retry 1x ONLY for transient network errors.
+    /// 401/403/429/404 are NOT retried — they become typed GroqErrors directly.
     private static func requestOnce(key: String, model: String,
-                                    contents: [Content],
-                                    systemInstruction: SystemInstruction?) async throws -> String {
-        let url = URL(string: "\(endpoint)/\(model):generateContent")!
+                                    messages: [Message]) async throws -> String {
+        let url = URL(string: endpoint)!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
-        req.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 60
-        let body = GenerateRequest(contents: contents, systemInstruction: systemInstruction)
+        let body = ChatRequest(model: model, messages: messages)
         req.httpBody = try JSONEncoder().encode(body)
 
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await URLSession.shared.data(for: req)
         } catch {
-            // Retry sekali untuk network error, lalu serahkan sebagai .network.
+            // Retry once for network errors, then hand over as .network.
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             do {
                 (data, response) = try await URLSession.shared.data(for: req)
             } catch {
-                throw GeminiError.network(error)
+                throw GroqError.network(error)
             }
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        let bodyText = String(data: data, encoding: .utf8) ?? ""
         switch status {
         case 200:
             break
         case 401, 403:
-            throw GeminiError.unauthorized
+            throw GroqError.unauthorized
         case 404:
-            throw GeminiError.modelNotFound()
+            throw GroqError.modelNotFound()
         case 429:
-            throw GeminiError.quotaExceeded
+            throw GroqError.quotaExceeded
+        case 400 where bodyText.lowercased().contains("model"):
+            // Groq returns 400 (not 404) for unknown/decommissioned models.
+            throw GroqError.modelNotFound()
         default:
-            let body = String(data: data, encoding: .utf8) ?? ""
-            throw GeminiError.invalidResponse("HTTP \(status)\n\(body)")
+            throw GroqError.invalidResponse("HTTP \(status)\n\(bodyText)")
         }
 
         do {
-            let decoded = try JSONDecoder().decode(GenerateResponse.self, from: data)
+            let decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
             if let apiErr = decoded.error {
-                // Body 200 tapi envelope error (jarang) — petakan status string.
-                switch apiErr.status {
-                case "UNAUTHENTICATED", "PERMISSION_DENIED": throw GeminiError.unauthorized
-                case "RESOURCE_EXHAUSTED": throw GeminiError.quotaExceeded
-                case "NOT_FOUND": throw GeminiError.modelNotFound()
-                default: throw GeminiError.invalidResponse(apiErr.message ?? "error tak dikenal")
-                }
+                // 200 body but error envelope (rare) — map by message.
+                let msg = (apiErr.message ?? "").lowercased()
+                if msg.contains("model") { throw GroqError.modelNotFound() }
+                throw GroqError.invalidResponse(apiErr.message ?? "unknown error")
             }
-            let text = (decoded.candidates?.first?.content?.parts ?? [])
-                .compactMap(\.text).joined()
+            let text = decoded.choices?.first?.message?.content ?? ""
             guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw GeminiError.invalidResponse("candidates kosong")
+                throw GroqError.invalidResponse("empty choices")
             }
             return text
-        } catch let e as GeminiError {
+        } catch let e as GroqError {
             throw e
         } catch {
-            throw GeminiError.invalidResponse("decode: \(error.localizedDescription)")
+            throw GroqError.invalidResponse("decode: \(error.localizedDescription)")
         }
     }
 }

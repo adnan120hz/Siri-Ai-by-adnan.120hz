@@ -12,7 +12,7 @@ enum GitHubAgent {
     /// sebagai pesan "tool" ke model.
     static func execute(name: String, arguments: String) async -> String {
         guard let token = GitHubStore.load(), !token.isEmpty else {
-            return "GitHub belum terhubung di HP ini. Suruh user buka Pengaturan → Konektivitas → GitHub."
+            return "GitHub is not connected on this phone. Tell the user to open Settings → Connectivity → GitHub."
         }
         let args = parseArgs(arguments)
         do {
@@ -21,21 +21,21 @@ enum GitHubAgent {
                 return try await listRepos(token: token)
             case "github_list_files":
                 guard let repo = args["repo"], !repo.isEmpty else {
-                    return "Parameter 'repo' wajib (format 'owner/nama')."
+                    return "Parameter 'repo' is required (format 'owner/name')."
                 }
                 return try await listFiles(token: token, repo: repo,
                                            prefix: args["path_prefix"])
             case "github_read_file":
                 guard let repo = args["repo"], !repo.isEmpty,
                       let path = args["path"], !path.isEmpty else {
-                    return "Parameter 'repo' dan 'path' wajib."
+                    return "Parameters 'repo' and 'path' are required."
                 }
                 return try await readFile(token: token, repo: repo, path: path)
             case "github_write_file":
                 guard let repo = args["repo"], !repo.isEmpty,
                       let path = args["path"], !path.isEmpty,
                       let content = args["content"] else {
-                    return "Parameter 'repo', 'path', dan 'content' wajib."
+                    return "Parameters 'repo', 'path', and 'content' are required."
                 }
                 let message: String = {
                     if let m = args["message"], !m.isEmpty { return m }
@@ -46,16 +46,16 @@ enum GitHubAgent {
             case "github_delete_file":
                 guard let repo = args["repo"], !repo.isEmpty,
                       let path = args["path"], !path.isEmpty else {
-                    return "Parameter 'repo' dan 'path' wajib."
+                    return "Parameters 'repo' and 'path' are required."
                 }
                 let delMessage: String = {
                     if let m = args["message"], !m.isEmpty { return m }
-                    return "Hapus \(path) via ai adnan.120hz"
+                    return "Delete \(path) via ai adnan.120hz"
                 }()
                 return try await deleteFile(token: token, repo: repo, path: path,
                                             message: delMessage)
             default:
-                return "Tool tidak dikenal: \(name)."
+                return "Unknown tool: \(name)."
             }
         } catch {
             return "GitHub error: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
@@ -66,7 +66,7 @@ enum GitHubAgent {
 
     private static func listRepos(token: String) async throws -> String {
         let repos = try await GitHubClient.repos(token: token)
-        guard !repos.isEmpty else { return "Tidak ada repository ditemukan." }
+        guard !repos.isEmpty else { return "No repositories found." }
         let lines = repos.prefix(60).map { r in
             let lock = r.private ? "🔒" : "🌐"
             let desc = (r.description ?? "").prefix(80)
@@ -93,7 +93,7 @@ enum GitHubAgent {
         if let p = prefix, !p.isEmpty {
             paths = paths.filter { $0.hasPrefix(p) }
         }
-        guard !paths.isEmpty else { return "Tidak ada file ditemukan di \(repo)." }
+        guard !paths.isEmpty else { return "No files found in \(repo)." }
         let shown = paths.prefix(120).joined(separator: "\n")
         var out = "File di \(repo) (branch \(branch)):\n\(shown)"
         if paths.count > 120 { out += "\n…dan \(paths.count - 120) file lainnya." }
@@ -113,8 +113,8 @@ enum GitHubAgent {
     private static func writeFile(token: String, repo: String, path: String,
                                   content: String, message: String) async throws -> String {
         guard content.utf8.count <= maxWriteBytes else {
-            return "File terlalu besar (\(content.utf8.count) bytes, batas ~900KB untuk Contents API). " +
-                "Pecah jadi beberapa file atau edit manual."
+            return "File too large (\(content.utf8.count) bytes, ~900KB limit for Contents API). " +
+                "Split into multiple files or edit manually."
         }
         // Kalau file sudah ada → butuh SHA untuk update; kalau 404 → buat baru.
         var sha: String? = nil
@@ -138,11 +138,11 @@ enum GitHubAgent {
         do {
             sha = try await GitHubClient.getFileSHA(token: token, repo: repo, path: path)
         } catch GitHubError.notFound {
-            return "File \(path) tidak ditemukan di \(repo) — tidak ada yang dihapus."
+            return "File \(path) not found in \(repo) — nothing deleted."
         }
         let commit = try await GitHubClient.deleteFile(token: token, repo: repo, path: path,
                                                        sha: sha, message: message)
-        return "OK: \(path) dihapus dari \(repo) (commit \(commit.prefix(7)))."
+        return "OK: \(path) deleted from \(repo) (commit \(commit.prefix(7)))."
     }
 
     // MARK: - Util

@@ -3,8 +3,8 @@ import SwiftData
 import SwiftUI
 import Combine
 
-// MARK: - Orkestrasi kirim chat: bangun konteks → Gemini → simpan → ingatan.
-// Transport: GeminiClient (key TANAM via Secrets, tanpa input manual).
+// MARK: - Chat orchestration: build context → Groq → save → memory.
+// Transport: GroqClient (embedded key via Secrets, no manual input).
 
 @MainActor
 final class ChatViewModel: ObservableObject {
@@ -42,7 +42,7 @@ final class ChatViewModel: ObservableObject {
     /// True kalau error ini adalah pembatalan request (user stop / task cancel).
     private static func isCancellation(_ error: Error) -> Bool {
         if error is CancellationError { return true }
-        if case GeminiError.network(let e) = error,
+        if case GroqError.network(let e) = error,
            let urlErr = e as? URLError, urlErr.code == .cancelled {
             return true
         }
@@ -77,9 +77,9 @@ final class ChatViewModel: ObservableObject {
         }
         // Key TANAM via Secrets (CI). Kalau kosong = CI misconfig; jangan
         // pernah log nilainya. Tidak ada lagi input key manual.
-        guard !Secrets.geminiFreeKey.isEmpty else {
+        guard !Secrets.groqFreeKey.isEmpty else {
             print("[SiriAi] send(): aborted — embedded key kosong")
-            lastError = GeminiError.unauthorized.localizedDescription
+            lastError = GroqError.unauthorized.localizedDescription
             return
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -128,7 +128,7 @@ final class ChatViewModel: ObservableObject {
         }
         conversation.messages.append(userMsg)
         conversation.updatedAt = Date()
-        if conversation.title == "Obrolan baru" {
+        if conversation.title == "New chat" {
             if !trimmed.isEmpty {
                 conversation.title = String(trimmed.prefix(40))
             } else if !imageDatas.isEmpty || !fileImages.isEmpty {
@@ -152,7 +152,7 @@ final class ChatViewModel: ObservableObject {
         conversation.messages.append(assistantMsg)
         try? context.save()
 
-        print("[SiriAi] send(): model=\(GeminiClient.primaryModel) text=\(trimmed.prefix(60)) images=\(imageDatas.count) fileImages=\(fileImages.count) premiumKey=\(Self.useEffectivePremiumKey)")
+        print("[SiriAi] send(): model=\(GroqClient.primaryModel) text=\(trimmed.prefix(60)) images=\(imageDatas.count) fileImages=\(fileImages.count) premiumKey=\(Self.useEffectivePremiumKey)")
 
         // Capture immutable copies for the Task (Swift 6 concurrency).
         let taskAssistantMsg = assistantMsg
@@ -171,11 +171,11 @@ final class ChatViewModel: ObservableObject {
                 let allImages = taskImageDatas.map { (data: $0.data, mimeType: "image/jpeg") }
                     + taskFileImages
                 if allImages.isEmpty {
-                    full = try await GeminiClient.sendText(
+                    full = try await GroqClient.sendText(
                         taskTrimmed, history: taskHistory, systemInstruction: taskSystem,
                         usePremiumKey: taskUsePremiumKey)
                 } else {
-                    full = try await GeminiClient.sendWithImages(
+                    full = try await GroqClient.sendWithImages(
                         taskTrimmed, images: allImages, history: taskHistory,
                         systemInstruction: taskSystem, usePremiumKey: taskUsePremiumKey)
                 }
@@ -214,8 +214,8 @@ final class ChatViewModel: ObservableObject {
                 if Self.isCancellation(error) {
                     print("[SiriAi] request cancelled; silent=\(self.cancelledByUser)")
                     if !self.cancelledByUser {
-                        taskAssistantMsg.errorText = "Terputus. Ketuk \"Try again\"."
-                        self.lastError = "Terputus. Ketuk \"Try again\"."
+                        taskAssistantMsg.errorText = "Disconnected. Tap \"Try again\"."
+                        self.lastError = "Disconnected. Tap \"Try again\"."
                         try? context.save()
                     }
                 } else {
@@ -257,11 +257,13 @@ final class ChatViewModel: ObservableObject {
                              memoryEnabled: Bool,
                              excludeMessageId: UUID) -> (String, [(role: String, text: String)]) {
         var system = """
-        Kamu adalah "Siri Ai". Gaya: singkat, dingin, cool kayak Siri asli. \
-        Jawab seperlunya saja — maksimal 2-3 kalimat untuk hal sederhana. \
-        Jangan bertele-tele, jangan ceramah, jangan pakai emoji. \
-        Jangan pakai format markdown (tanpa **, tanpa #, tanpa list). \
-        Teks polos saja. Ikuti bahasa pengguna.
+        You are "Siri Ai", created by Adnan.120hz. If asked who made or created you, \
+        say Adnan.120hz. NEVER claim to be made by OpenAI, Google, Meta, or any other company. \
+        Style: short, cold, cool like the real Siri. \
+        Answer only as much as needed — at most 2-3 sentences for simple things. \
+        No rambling, no lectures, no emoji. \
+        No markdown formatting (no **, no #, no lists). \
+        Plain text only. Follow the user's language.
         """
 
         let memExtra = MemoryService.systemPromptExtra(context: context,
@@ -271,20 +273,20 @@ final class ChatViewModel: ObservableObject {
 
         if !conversation.sources.isEmpty {
             let src = conversation.sources.map {
-                "=== Sumber: \($0.fileName) ===\n\($0.extractedText.prefix(12000))"
+                "=== Source: \($0.fileName) ===\n\($0.extractedText.prefix(12000))"
             }.joined(separator: "\n\n")
-            system += "\n\nPengguna melampirkan sumber berikut. Pakai sebagai referensi utama saat relevan:\n\(src)"
+            system += "\n\nThe user attached the following sources. Use them as the primary reference when relevant:\n\(src)"
         }
 
         if let gh = GitHubStore.load(), !gh.isEmpty {
             system += """
 
-            KAMU PUNYA AKSES GITHUB ASLI (bukan simulasi). User sudah menghubungkan GitHub di menu \
-            Konektivitas — token tersimpan aman di HP ini, JANGAN pernah minta token di chat.
-            Catatan jujur: di build ini AI tidak punya function-calling tools — kamu menjawab \
-            dari teks yang user berikan di chat. Jangan mengklaim bisa memanggil tools \
-            (list/read/write file GitHub). Kalau user bertanya soal repo/kode, jawab dari \
-            konteks yang ada, atau arahkan user ke menu Konektivitas → GitHub di app.
+            YOU HAVE REAL GITHUB ACCESS (not a simulation). The user connected GitHub in the \
+            Connectivity menu — the token is stored safely on this phone, NEVER ask for a token in chat.
+            Honest note: in this build the AI has no function-calling tools — you answer \
+            from the text the user provides in chat. Do not claim you can call tools \
+            (list/read/write GitHub files). If the user asks about repos/code, answer from \
+            the available context, or point them to Connectivity → GitHub in the app.
             """
         }
 
@@ -299,8 +301,8 @@ final class ChatViewModel: ObservableObject {
             }
         }
 
-        // Riwayat: 20 pesan terakhir (teks saja), tanpa pesan yang sedang dikirim.
-        // Role "assistant" dipetakan ke "model" oleh GeminiClient.
+        // History: last 20 messages (text only), excluding the one being sent.
+        // Roles "user"/"assistant" pass through unchanged (OpenAI format).
         var history: [(role: String, text: String)] = []
         let past = conversation.messages
             .sorted { $0.createdAt < $1.createdAt }

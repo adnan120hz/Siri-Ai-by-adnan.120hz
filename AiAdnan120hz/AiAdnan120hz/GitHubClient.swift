@@ -65,17 +65,17 @@ enum GitHubError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noToken: return "Belum ada GitHub token. Hubungkan dulu."
+        case .noToken: return "No GitHub token yet. Connect first."
         case .http(let s, let b):
             let short = b.count > 400 ? String(b.prefix(400)) + "…" : b
             return "GitHub HTTP \(s)\n\(short)"
         case .network(let e): return "Jaringan: \(e.localizedDescription)"
-        case .decoding(let s): return "Gagal baca respons: \(s)"
+        case .decoding(let s): return "Failed to read response: \(s)"
         case .noRepoAccess:
-            return "Token tidak punya akses repository (GitHub mengembalikan 404). " +
-                "Buat token baru — classic: centang scope \"repo\"; " +
-                "fine-grained: beri akses ke repository yang dibutuhkan — lalu hubungkan ulang di menu ini."
-        case .notFound(let s): return "Tidak ditemukan: \(s). Periksa nama repo / path file."
+            return "Token has no repository access (GitHub returned 404). " +
+                "Create a new token — classic: check the \"repo\" scope; " +
+                "fine-grained: grant access to the needed repositories — then reconnect in this menu."
+        case .notFound(let s): return "Not found: \(s). Check the repo name / file path."
         }
     }
 }
@@ -110,13 +110,13 @@ struct GitHubClient {
 
     private static func get<T: Decodable>(path: String, query: [String: String] = [:], token: String) async throws -> T {
         guard let url = apiURL(path: path, query: query) else {
-            throw GitHubError.decoding("URL tidak valid: \(path)")
+            throw GitHubError.decoding("Invalid URL: \(path)")
         }
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        req.setValue(GeminiClient.userAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue(GroqClient.userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 30
         let (data, response): (Data, URLResponse)
         do {
@@ -165,12 +165,12 @@ struct GitHubClient {
     static func rawFile(token: String, repo: String, branch: String, path: String) async throws -> String {
         let encodedPath = encodePath(path)
         guard let url = URL(string: "https://raw.githubusercontent.com/\(repo)/\(branch)/\(encodedPath)") else {
-            throw GitHubError.decoding("Path tidak valid: \(path)")
+            throw GitHubError.decoding("Invalid path: \(path)")
         }
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.setValue(GeminiClient.userAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue(GroqClient.userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 60
         let (data, response): (Data, URLResponse)
         do {
@@ -184,7 +184,7 @@ struct GitHubClient {
             throw GitHubError.http(status, String(data: data, encoding: .utf8) ?? "")
         }
         guard let text = String(data: data, encoding: .utf8), !text.isEmpty else {
-            throw GitHubError.decoding("File kosong / bukan teks.")
+            throw GitHubError.decoding("File is empty / not text.")
         }
         return String(text.prefix(SourceExtractor.maxChars))
     }
@@ -221,7 +221,7 @@ struct GitHubClient {
         req.httpMethod = method
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        req.setValue(GeminiClient.userAgent, forHTTPHeaderField: "User-Agent")
+        req.setValue(GroqClient.userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 30
         if let jsonBody {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -239,10 +239,10 @@ struct GitHubClient {
         guard okStatuses.contains(status) else {
             if status == 404 { throw GitHubError.notFound("path di repo") }
             if status == 409 {
-                throw GitHubError.http(status, "Konflik SHA — file berubah di server. Baca ulang dulu lalu coba lagi.")
+                throw GitHubError.http(status, "SHA conflict — file changed on server. Re-read it first, then try again.")
             }
             if status == 422 {
-                throw GitHubError.http(status, "Validasi gagal: \(String(data: data, encoding: .utf8) ?? "")")
+                throw GitHubError.http(status, "Validation failed: \(String(data: data, encoding: .utf8) ?? "")")
             }
             throw GitHubError.http(status, String(data: data, encoding: .utf8) ?? "")
         }
@@ -256,7 +256,7 @@ struct GitHubClient {
     /// Ambil SHA blob file — wajib untuk update/delete. Throw notFound kalau tidak ada.
     static func getFileSHA(token: String, repo: String, path: String) async throws -> String {
         guard let url = contentsURL(repo: repo, path: path) else {
-            throw GitHubError.decoding("Path tidak valid: \(path)")
+            throw GitHubError.decoding("Invalid path: \(path)")
         }
         do {
             let item: ContentItem = try await sendJSON(method: "GET", url: url,
@@ -273,7 +273,7 @@ struct GitHubClient {
     static func writeFile(token: String, repo: String, path: String,
                           content: String, message: String, sha: String?) async throws -> String {
         guard let url = contentsURL(repo: repo, path: path) else {
-            throw GitHubError.decoding("Path tidak valid: \(path)")
+            throw GitHubError.decoding("Invalid path: \(path)")
         }
         struct Body: Encodable {
             var message: String
@@ -302,7 +302,7 @@ struct GitHubClient {
     static func deleteFile(token: String, repo: String, path: String,
                            sha: String, message: String) async throws -> String {
         guard let url = contentsURL(repo: repo, path: path) else {
-            throw GitHubError.decoding("Path tidak valid: \(path)")
+            throw GitHubError.decoding("Invalid path: \(path)")
         }
         struct Body: Encodable { var message: String; var sha: String }
         let bodyData = try JSONEncoder().encode(Body(message: message, sha: sha))

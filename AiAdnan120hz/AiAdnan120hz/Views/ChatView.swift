@@ -193,7 +193,7 @@ struct ChatView: View {
                 onPick: { handleDocumentPick($0) },
                 onCancel: {},
                 onUnsupportedType: { ext in
-                    alertText = "Format '\(ext)' diblokir. Hanya file PDF dan ZIP yang didukung."
+                    alertText = "Format '\(ext)' is blocked. Only PDF and ZIP files are supported."
                 }
             )
         }
@@ -320,7 +320,7 @@ struct ChatView: View {
                         } else {
                             plusRow(icon: "lock.fill", title: "Documents") {
                                 dismissMenu()
-                                alertText = "Aktifkan \"File reading\" di menu Subscriptions dulu untuk baca file."
+                                alertText = "Enable \"File reading\" in the Subscriptions menu first to read files."
                             }
                         }
                     }
@@ -462,7 +462,7 @@ struct ChatView: View {
             if !extracted.metadata.isEmpty { text = extracted.metadata + "\n\n" + text }
             text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else {
-                alertText = "File '\(extracted.fileName)' tidak menghasilkan teks yang bisa dibaca. Coba file lain."
+                alertText = "File '\(extracted.fileName)' produced no readable text. Try another file."
                 return
             }
             guard StorageQuota.canAccommodate(Int64(text.utf8.count)) else {
@@ -473,26 +473,24 @@ struct ChatView: View {
             conversation.sources.append(source)
             conversation.updatedAt = Date()
             try? context.save()
-            alertText = "Dokumen '\(extracted.fileName)' ditambahkan sebagai sumber. Tulis pertanyaanmu lalu kirim."
+            alertText = "Document '\(extracted.fileName)' added as a source. Type your question, then send."
         }
     }
 
     // MARK: - Free-limit banner.
-
-    /// Banner blokir free-limit. Teks VERBATIM kontrak — jangan diubah.
     @ViewBuilder
     private func limitBanner(for notice: LimitNotice) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.circle")
                 .foregroundStyle(.orange)
             Text(notice.kind == .perChat
-                 ? "Limit 20 pesan per chat tercapai. Buat chat baru untuk lanjut."
-                 : "tunggu besok, limit harian anda sudah habis. jika ingin limit lebih banyak, get subscriptions")
+                 ? "20-message per-chat limit reached. Start a new chat to continue."
+                 : "Come back tomorrow — your daily limit is used up. For higher limits, get subscriptions.")
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
             if notice.kind == .perChat {
-                Button("Buat chat baru") { showConversations = true }
+                Button("New chat") { showConversations = true }
                     .font(.footnote.bold())
             } else {
                 Button("Get subscriptions") {

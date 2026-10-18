@@ -125,7 +125,7 @@ final class AppState: ObservableObject {
     /// Key TANAM via Secrets (di-generate CI dari GitHub Secrets) — tidak ada
     /// lagi input key manual / provider. hasAPIKey = false hanya kalau key
     /// gagal tertanam (CI misconfig).
-    @Published var hasAPIKey: Bool = !Secrets.geminiFreeKey.isEmpty
+    @Published var hasAPIKey: Bool = !Secrets.groqFreeKey.isEmpty
 
     // @AppStorage tidak memicu objectWillChange di dalam ObservableObject
     // (UI tidak refresh) → pakai @Published + tulis UserDefaults manual.
@@ -147,6 +147,6 @@ final class AppState: ObservableObject {
 
     /// Key tertanam = selalu ada (kecuali CI misconfig).
     func refreshKeyStatus() {
-        hasAPIKey = !Secrets.geminiFreeKey.isEmpty
+        hasAPIKey = !Secrets.groqFreeKey.isEmpty
     }
 }

@@ -275,9 +275,9 @@ struct ConversationsView: View {
             get: { renameTarget != nil },
             set: { if !$0 { renameTarget = nil } }
         )) {
-            TextField("Nama baru", text: $renameText)
-            Button("Batal", role: .cancel) { renameTarget = nil }
-            Button("Simpan") {
+            TextField("New name", text: $renameText)
+            Button("Cancel", role: .cancel) { renameTarget = nil }
+            Button("Save") {
                 if let target = renameTarget {
                     let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !trimmed.isEmpty {

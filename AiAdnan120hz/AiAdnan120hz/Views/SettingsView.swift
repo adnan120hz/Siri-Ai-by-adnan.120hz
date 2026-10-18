@@ -22,7 +22,7 @@ struct SettingsView: View {
                 // Key tertanam; kalau kosong = CI misconfig.
                 if !appState.hasAPIKey {
                     Section {
-                        Label("AI key belum tertanam. Rebuild dari CI dengan GitHub Secrets yang benar.",
+                        Label("AI key is not embedded. Rebuild from CI with the correct GitHub Secrets.",
                               systemImage: "key.fill")
                             .font(.subheadline)
                             .foregroundStyle(.orange)
@@ -74,7 +74,7 @@ struct SettingsView: View {
                 }
 
                 Section(header: Text("About")) {
-                    Text("Siri Ai — AI chat powered by Gemini. No account, no login.")
+                    Text("Siri Ai — AI chat powered by Groq. No account, no login.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Link("Credit: @adnan.120hz (TikTok)", destination: URL(string: "https://www.tiktok.com/@adnan.120hz")!)

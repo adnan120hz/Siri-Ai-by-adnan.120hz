@@ -27,7 +27,7 @@ struct ContentView: View {
             Text("Siri Ai")
                 .font(.title)
                 .bold()
-            Text("AI key belum tertanam di build ini.\nRebuild dari CI dengan GitHub Secrets yang benar.")
+            Text("AI key is not embedded in this build.\nRebuild from CI with the correct GitHub Secrets.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
