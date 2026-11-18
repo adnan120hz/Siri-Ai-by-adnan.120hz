@@ -23,8 +23,9 @@ struct ChatView: View {
     @State private var inputText = ""
     @State private var pendingImages: [Data] = []
     /// Toggle "Search the web" (Tavily grounding) — tersimpan antar sesi.
-    /// Letaknya di menu titik tiga pojok kanan atas. Kalau key Tavily belum
-    /// ada, toggle tampil tapi nonaktif (lihat menu di atas).
+    /// Letaknya di menu hamburger layar daftar chat (Grid/List/Select/
+    /// Voice/Settings). Kalau key Tavily belum ada, toggle tampil tapi
+    /// nonaktif (lihat menu di sana).
     @AppStorage("webSearchEnabled") private var webSearchEnabled = false
     /// Waktu kirim terakhir: cegah double-tap membunuh request sendiri.
     @State private var lastSendStart = Date.distantPast
@@ -65,31 +66,6 @@ struct ChatView: View {
                 }
                 .accessibilityLabel(openedFromHistory ? Text("Back") : Text("Close"))
                 Spacer()
-                // Menu titik tiga (pojok kanan atas): toggle "Search the web".
-                // Pindah dari baris di atas bottom bar — posisi saja yang
-                // berubah, sistem grounding (ChatViewModel) tidak disentuh.
-                Menu {
-                    if SearchService.isConfigured(usePremiumKey: premiumState.isPremium && premiumFeatures.usePremiumKey) {
-                        Toggle(isOn: $webSearchEnabled) {
-                            Label("Search the web", systemImage: "globe")
-                        }
-                    } else {
-                        Toggle(isOn: .constant(false)) {
-                            Label("Search the web", systemImage: "globe")
-                        }
-                        .disabled(true)
-                        Button("Get a free Tavily API key") {
-                            alertText = "Web search needs a free Tavily API key — create one at tavily.com, then run scripts/generate_secrets.py and rebuild."
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 40, height: 40)
-                        .background(SiriCircleGlassFill())
-                }
-                .accessibilityLabel(Text("More options"))
             }
             .padding(.horizontal, SiriTheme.m)
             .padding(.top, SiriTheme.s)

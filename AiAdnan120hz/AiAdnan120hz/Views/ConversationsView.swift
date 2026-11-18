@@ -34,6 +34,12 @@ struct ConversationsView: View {
     /// Lingkaran premium: kiri atas normal, hilang bila ON
     /// (akses pindah ke item Subscriptions di menu •••).
     @AppStorage("siri.premium.hideCircle") private var hidePremiumCircle = false
+    /// Toggle "Search the web" (Tavily grounding) — key AppStorage yang
+    /// sama dengan ChatView, jadi chat langsung membaca nilainya.
+    @AppStorage("webSearchEnabled") private var webSearchEnabled = false
+    @ObservedObject private var premiumState = PremiumState.shared
+    @ObservedObject private var premiumFeatures = PremiumFeatures.shared
+    @State private var showApiKeyAlert = false
 
     private var filtered: [Conversation] {
         guard !searchText.isEmpty else { return conversations }
@@ -90,6 +96,21 @@ struct ConversationsView: View {
                         Button { showVoiceModel = true } label: {
                             Label("Voice", systemImage: "waveform")
                         }
+                        // Toggle "Search the web" (Tavily grounding) —
+                        // gabung di menu ini; ChatView membaca key yang sama.
+                        if SearchService.isConfigured(usePremiumKey: premiumState.isPremium && premiumFeatures.usePremiumKey) {
+                            Toggle(isOn: $webSearchEnabled) {
+                                Label("Search the web", systemImage: "globe")
+                            }
+                        } else {
+                            Toggle(isOn: .constant(false)) {
+                                Label("Search the web", systemImage: "globe")
+                            }
+                            .disabled(true)
+                            Button("Get a free Tavily API key") {
+                                showApiKeyAlert = true
+                            }
+                        }
                         // "Hide subscriptions" ON: lingkaran premium hilang,
                         // aksesnya pindah ke item ini di dalam menu •••.
                         if hidePremiumCircle {
@@ -107,6 +128,11 @@ struct ConversationsView: View {
                     .buttonStyle(.plain) // Tanpa background abu-abu sistem — cuma lingkaran putih.
                     .tint(.primary)
                     .accessibilityLabel(Text("View options"))
+                    .alert("Web search needs a free Tavily API key", isPresented: $showApiKeyAlert) {
+                        Button("OK", role: .cancel) { }
+                    } message: {
+                        Text("Create one at tavily.com, then run scripts/generate_secrets.py and rebuild.")
+                    }
                 }
                 // Lingkaran premium TIDAK dipindah ke kanan saat hide —
                 // aksesnya masuk ke item "Subscriptions" di menu ••• (di atas).
