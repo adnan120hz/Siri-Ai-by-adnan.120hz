@@ -9,10 +9,12 @@ Environment variables yang dibaca:
     GEMINI_API_KEY_FREE       # NAMA env dipertahankan; nilainya kini key GROQ
     GEMINI_API_KEY_PREMIUM    # NAMA env dipertahankan; nilainya kini key GROQ
     REDEEM_SECRET
-    TAVILY_API_KEY            # OPSIONAL: key Tavily (web search grounding).
+    TAVILY_API_KEY            # OPSIONAL: key Tavily free (web search grounding).
                               # Kosong -> dummy; app tetap jalan, fitur
                               # cari-di-web mati dengan jujur. --strict pun
                               # TIDAK gagal bila yang ini kosong.
+    TAVILY_API_KEY_PREMIUM    # OPSIONAL: key Tavily premium (dipakai hanya
+                              # kalau user premium + toggle "Other API Key" ON).
 
 ATURAN: script ini TIDAK PERNAH mencetak nilai secret ke stdout/log.
 """
@@ -38,6 +40,7 @@ SECRETS = [
     ("GEMINI_API_KEY_PREMIUM", "groqPremiumKey", "DUMMY_PREMIUM_KEY", True),
     ("REDEEM_SECRET", "redeemSecret", "DUMMY_REDEEM_SECRET", True),
     ("TAVILY_API_KEY", "tavilyKey", "DUMMY_TAVILY_KEY", False),
+    ("TAVILY_API_KEY_PREMIUM", "tavilyPremiumKey", "DUMMY_TAVILY_PREMIUM_KEY", False),
 ]
 
 

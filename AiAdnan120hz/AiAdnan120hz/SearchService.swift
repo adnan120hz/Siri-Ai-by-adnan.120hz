@@ -10,7 +10,11 @@ import Foundation
 // Free tier "Researcher": 1.000 kredit/bulan, tanpa kartu.
 //   - POST /search basic = 1 kredit/request (max_results 5).
 //   - POST /extract = 1 kredit per 5 URL sukses.
-// Key di Secrets.tavilyKey (di-generate dari env TAVILY_API_KEY).
+// Key di Secrets.tavilyKey (free, env TAVILY_API_KEY) dan
+// Secrets.tavilyPremiumKey (premium, env TAVILY_API_KEY_PREMIUM) —
+// pola sama seperti kunci Groq (free/premium). Premium HANYA dipakai
+// kalau user premium DAN toggle "Other API Key" ON (lihat
+// ChatViewModel.useEffectivePremiumKey); kondisi lain → selalu key free.
 // Key KOSONG/dummy = fitur mati dengan jujur: toggle "Cari di web" di
 // ChatView tampil tapi nonaktif, auto-detect diam-diam tidak mencari.
 
@@ -19,10 +23,18 @@ enum SearchService {
     /// Halaman yang diambil isinya (/extract) — 2 URL = 1 kredit.
     static let maxExtractURLs = 2
 
-    /// True kalau ada key Tavily asli (bukan kosong, bukan dummy generate lokal).
-    static var isConfigured: Bool {
-        let k = Secrets.tavilyKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !k.isEmpty && k != "DUMMY_TAVILY_KEY"
+    /// Pilih key Tavily seperti APIClient.pickKey untuk Groq.
+    private static func pickKey(usePremiumKey: Bool) -> String {
+        usePremiumKey ? Secrets.tavilyPremiumKey : Secrets.tavilyKey
+    }
+
+    /// True kalau ada key Tavily asli (bukan kosong, bukan dummy generate lokal)
+    /// untuk key yang efektif (free atau premium).
+    static func isConfigured(usePremiumKey: Bool = false) -> Bool {
+        let k = pickKey(usePremiumKey: usePremiumKey)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let dummy = usePremiumKey ? "DUMMY_TAVILY_PREMIUM_KEY" : "DUMMY_TAVILY_KEY"
+        return !k.isEmpty && k != dummy
     }
 
     struct WebResult {
@@ -44,7 +56,7 @@ enum SearchService {
             case .notConfigured:
                 return "Web search needs a free Tavily API key."
             case .unauthorized:
-                return "Tavily API key rejected (401). Check TAVILY_API_KEY, then rebuild."
+                return "Tavily API key rejected (401). Check TAVILY_API_KEY / TAVILY_API_KEY_PREMIUM, then rebuild."
             case .quotaExceeded:
                 return "Tavily quota exceeded (429). Try again later."
             case .network(let e):
@@ -96,8 +108,9 @@ enum SearchService {
 
     /// Cari di web. Throw kalau gagal — pemanggil jatuh kembali ke jawaban
     /// tanpa grounding (jangan memalsukan jawaban dari hasil kosong).
-    static func search(_ query: String) async throws -> [WebResult] {
-        guard isConfigured else { throw SearchError.notConfigured }
+    static func search(_ query: String,
+                       usePremiumKey: Bool = false) async throws -> [WebResult] {
+        guard isConfigured(usePremiumKey: usePremiumKey) else { throw SearchError.notConfigured }
         let url = URL(string: "https://api.tavily.com/search")!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -105,7 +118,7 @@ enum SearchService {
         req.setValue(GroqClient.userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 30
         req.httpBody = try JSONEncoder().encode(
-            SearchRequest(api_key: Secrets.tavilyKey, query: query))
+            SearchRequest(api_key: pickKey(usePremiumKey: usePremiumKey), query: query))
         let (data, response) = try await dataWithNetworkError(req)
         let status = (response as? HTTPURLResponse)?.statusCode ?? -1
         let bodyText = String(data: data, encoding: .utf8) ?? ""
@@ -150,8 +163,9 @@ enum SearchService {
     /// Gagal sebagian/total = kembalikan yang berhasil saja (boleh kosong) —
     /// snippet dari /search tetap cukup untuk grounding.
     static func extractTopContents(_ results: [WebResult],
-                                   query: String) async -> [String: String] {
-        guard isConfigured else { return [:] }
+                                   query: String,
+                                   usePremiumKey: Bool = false) async -> [String: String] {
+        guard isConfigured(usePremiumKey: usePremiumKey) else { return [:] }
         let urls = Array(results.prefix(maxExtractURLs)).map { $0.url }
         guard !urls.isEmpty else { return [:] }
         let url = URL(string: "https://api.tavily.com/extract")!
@@ -162,7 +176,7 @@ enum SearchService {
         req.timeoutInterval = 30
         do {
             req.httpBody = try JSONEncoder().encode(
-                ExtractRequest(api_key: Secrets.tavilyKey, urls: urls, query: query))
+                ExtractRequest(api_key: pickKey(usePremiumKey: usePremiumKey), urls: urls, query: query))
             let (data, response) = try await URLSession.shared.data(for: req)
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
             guard status == 200 else { return [:] }

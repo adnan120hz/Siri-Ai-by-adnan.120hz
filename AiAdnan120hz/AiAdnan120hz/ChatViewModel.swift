@@ -180,12 +180,12 @@ final class ChatViewModel: ObservableObject {
                 var sourcesText: String? = nil
                 let needsSearch = taskWebSearchEnabled
                     || SearchService.needsFreshInfo(taskTrimmed)
-                if needsSearch && SearchService.isConfigured {
+                if needsSearch && SearchService.isConfigured(usePremiumKey: taskUsePremiumKey) {
                     do {
-                        let results = try await SearchService.search(taskTrimmed)
+                        let results = try await SearchService.search(taskTrimmed, usePremiumKey: taskUsePremiumKey)
                         if !results.isEmpty {
                             let extracts = await SearchService.extractTopContents(
-                                results, query: taskTrimmed)
+                                results, query: taskTrimmed, usePremiumKey: taskUsePremiumKey)
                             groundedSystem += "\n\n" + SearchService.groundingContext(
                                 from: results, extracts: extracts)
                             sourcesText = SearchService.sourcesText(from: results)

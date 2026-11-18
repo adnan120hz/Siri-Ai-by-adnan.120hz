@@ -14,6 +14,7 @@ Contoh strukturnya ada di `Secrets.swift.template`.
 | `GEMINI_API_KEY_PREMIUM` | Key Gemini tier premium  |
 | `REDEEM_SECRET`          | Secret validasi redeem   |
 | `TAVILY_API_KEY`         | Key Tavily (web search, **opsional** — kosong = dummy, `--strict` tetap lolos) |
+| `TAVILY_API_KEY_PREMIUM` | Key Tavily premium (**opsional** — dipakai hanya kalau user premium + toggle "Other API Key" ON) |
 
 ### Lokal (development)
 

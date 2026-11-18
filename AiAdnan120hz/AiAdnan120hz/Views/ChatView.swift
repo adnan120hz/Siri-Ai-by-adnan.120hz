@@ -163,7 +163,7 @@ struct ChatView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
-                if SearchService.isConfigured {
+                if SearchService.isConfigured(usePremiumKey: PremiumState.shared.isPremium && PremiumFeatures.shared.usePremiumKey) {
                     Toggle("", isOn: $webSearchEnabled)
                         .labelsHidden()
                 } else {
