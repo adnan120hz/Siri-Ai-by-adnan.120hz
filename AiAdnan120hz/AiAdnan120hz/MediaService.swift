@@ -9,7 +9,9 @@ import UniformTypeIdentifiers
 enum MediaService {
     // 1024px cukup untuk vision dan jauh lebih cepat di-upload daripada 1536.
     static let maxImageDimension: CGFloat = 1024
-    static let maxVideoFrames = 4
+    /// Batas model vision Groq (qwen/qwen3.8-27b): maks 3 gambar/request.
+    /// 1 video = 3 frame, jadi satu video sudah memenuhi kuota request.
+    static let maxVideoFrames = 3
 
     /// Kecilkan UIImage-data ke batas dimensi, kembalikan JPEG.
     static func downscaleJPEG(_ data: Data, maxDimension: CGFloat = maxImageDimension) -> Data? {

@@ -9,6 +9,10 @@ Environment variables yang dibaca:
     GEMINI_API_KEY_FREE       # NAMA env dipertahankan; nilainya kini key GROQ
     GEMINI_API_KEY_PREMIUM    # NAMA env dipertahankan; nilainya kini key GROQ
     REDEEM_SECRET
+    TAVILY_API_KEY            # OPSIONAL: key Tavily (web search grounding).
+                              # Kosong -> dummy; app tetap jalan, fitur
+                              # cari-di-web mati dengan jujur. --strict pun
+                              # TIDAK gagal bila yang ini kosong.
 
 ATURAN: script ini TIDAK PERNAH mencetak nilai secret ke stdout/log.
 """
@@ -24,13 +28,16 @@ OUTPUT_PATH = os.path.join(
     REPO_ROOT, "AiAdnan120hz", "AiAdnan120hz", "Secrets.swift"
 )
 
-# (nama env, nama properti Swift, nilai dummy lokal)
+# (nama env, nama properti Swift, nilai dummy lokal, wajib di --strict?)
 # CATATAN: nama env GEMINI_* dipertahankan (user sudah mengisi nilainya
 # dengan key Groq); nama properti Swift diganti agar jelas ini key Groq.
+# TAVILY_API_KEY sengaja TIDAK wajib: web search itu fitur opsional — CI
+# harus tetap hijau sebelum user sempat membuat key Tavily gratis.
 SECRETS = [
-    ("GEMINI_API_KEY_FREE", "groqFreeKey", "DUMMY_FREE_KEY"),
-    ("GEMINI_API_KEY_PREMIUM", "groqPremiumKey", "DUMMY_PREMIUM_KEY"),
-    ("REDEEM_SECRET", "redeemSecret", "DUMMY_REDEEM_SECRET"),
+    ("GEMINI_API_KEY_FREE", "groqFreeKey", "DUMMY_FREE_KEY", True),
+    ("GEMINI_API_KEY_PREMIUM", "groqPremiumKey", "DUMMY_PREMIUM_KEY", True),
+    ("REDEEM_SECRET", "redeemSecret", "DUMMY_REDEEM_SECRET", True),
+    ("TAVILY_API_KEY", "tavilyKey", "DUMMY_TAVILY_KEY", False),
 ]
 
 
@@ -73,10 +80,10 @@ def swift_property(prop_name: str, chunks: list) -> str:
 def main() -> int:
     args = parse_args()
     values = {}
-    for env_name, prop_name, dummy in SECRETS:
+    for env_name, prop_name, dummy, strict_required in SECRETS:
         value = os.environ.get(env_name, "").strip()
         if not value:
-            if args.strict:
+            if args.strict and strict_required:
                 print(
                     f"ERROR: {env_name} kosong. Set GitHub Secret "
                     f"'{env_name}' sebelum menjalankan build.",
@@ -93,7 +100,7 @@ def main() -> int:
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     properties = "\n\n".join(
         swift_property(prop, split_into_chunks(values[prop]))
-        for _, prop, _ in SECRETS
+        for _, prop, _, _ in SECRETS
     )
 
     content = f"""// Secrets.swift — FILE INI DI-GENERATE OTOMATIS, JANGAN EDIT MANUAL.

@@ -37,6 +37,10 @@ final class ChatMessage {
     var createdAt: Date
     var note: String?
     var errorText: String?
+    /// Daftar sumber web (judul — URL) dari grounding Tavily, ditampilkan
+    /// di bawah jawaban. nil = jawaban tanpa pencarian web. Properti baru
+    /// opsional — migrasi ringan SwiftData.
+    var webSources: String?
     var conversation: Conversation?
     @Relationship(deleteRule: .cascade, inverse: \ImageAttachment.message)
     var images: [ImageAttachment] = []

@@ -17,6 +17,9 @@ jobs:
           GEMINI_API_KEY_FREE: ${{ secrets.GEMINI_API_KEY_FREE }}
           GEMINI_API_KEY_PREMIUM: ${{ secrets.GEMINI_API_KEY_PREMIUM }}
           REDEEM_SECRET: ${{ secrets.REDEEM_SECRET }}
+          # Opsional: kalau GitHub Secret ini belum ada -> dummy (script tidak
+          # gagal). App tetap jalan; web search mati dengan jujur.
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: python3 scripts/generate_secrets.py --strict
 
       - name: Select Xcode 26

@@ -14,6 +14,7 @@
 		631E43E6F615B849A1268CB8 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72612619AFEA3F28D48495FE /* ChatViewModel.swift */; };
 		C0129ACCD92E3FE44AD6123E /* MediaService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61363FBBF40DADEDAA717D84 /* MediaService.swift */; };
 		634A9FA4EA04A6EB2257BD34 /* SourceExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB9111ED4C6C84430991C974 /* SourceExtractor.swift */; };
+		EF6C69E5E318E46B284085B6 /* SearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DB72044B5700525F31AB32 /* SearchService.swift */; };
 		76074D6502CB454A1E32F4B7 /* MemoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB501B1834DA052B65309C17 /* MemoryService.swift */; };
 		72A6120D554C129842D3A9E6 /* StorageQuota.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096E4B532241FA48AEAD5DAE /* StorageQuota.swift */; };
 		E296D3ADB41D42C293A2D721 /* SiriTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 630CE7032B5B48F7A57DA28D /* SiriTheme.swift */; };
@@ -56,6 +57,7 @@
 		72612619AFEA3F28D48495FE /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatViewModel.swift"; sourceTree = "<group>"; };
 		61363FBBF40DADEDAA717D84 /* MediaService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MediaService.swift"; sourceTree = "<group>"; };
 		FB9111ED4C6C84430991C974 /* SourceExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SourceExtractor.swift"; sourceTree = "<group>"; };
+		02DB72044B5700525F31AB32 /* SearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SearchService.swift"; sourceTree = "<group>"; };
 		DB501B1834DA052B65309C17 /* MemoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MemoryService.swift"; sourceTree = "<group>"; };
 		096E4B532241FA48AEAD5DAE /* StorageQuota.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StorageQuota.swift"; sourceTree = "<group>"; };
 		630CE7032B5B48F7A57DA28D /* SiriTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SiriTheme.swift"; sourceTree = "<group>"; };
@@ -118,6 +120,7 @@
 				72612619AFEA3F28D48495FE /* ChatViewModel.swift */,
 				61363FBBF40DADEDAA717D84 /* MediaService.swift */,
 				FB9111ED4C6C84430991C974 /* SourceExtractor.swift */,
+				02DB72044B5700525F31AB32 /* SearchService.swift */,
 				DB501B1834DA052B65309C17 /* MemoryService.swift */,
 				096E4B532241FA48AEAD5DAE /* StorageQuota.swift */,
 				38DF21AEF4612506D6BE5CBE /* Views */,
@@ -257,6 +260,7 @@
 				631E43E6F615B849A1268CB8 /* ChatViewModel.swift in Sources */,
 				C0129ACCD92E3FE44AD6123E /* MediaService.swift in Sources */,
 				634A9FA4EA04A6EB2257BD34 /* SourceExtractor.swift in Sources */,
+				EF6C69E5E318E46B284085B6 /* SearchService.swift in Sources */,
 				76074D6502CB454A1E32F4B7 /* MemoryService.swift in Sources */,
 				72A6120D554C129842D3A9E6 /* StorageQuota.swift in Sources */,
 				3EE38884CD4FE63CE3C04A92 /* ContentView.swift in Sources */,

@@ -52,9 +52,13 @@ enum GroqClient {
     static let primaryModel = "openai/gpt-oss-120b"
     static let fallbackModel = "openai/gpt-oss-20b"
     /// Vision model for sendWithImages (OpenAI image_url format).
-    /// NOTE: Groq free tier currently lists no vision model; this ID is kept
-    /// so image input works again if Groq re-adds one. A 404 surfaces honestly.
-    static let visionModel = "meta-llama/llama-4-scout-17b-16e-instruct"
+    /// Groq free tier, per Groq Vision docs (console.groq.com/docs/vision):
+    /// `meta-llama/llama-4-scout-17b-16e-instruct` DIHAPUS 17 Juli 2026 —
+    /// satu-satunya model vision gratis sekarang `qwen/qwen3.8-27b`
+    /// (status Preview). Batasnya: MAKS 3 gambar per request, tiap gambar
+    /// dihitung 2.048 token input, maks 20 MB. sendWithImages() memotong
+    /// ke 3 gambar pertama supaya request tidak ditolak 400.
+    static let visionModel = "qwen/qwen3.8-27b"
 
     private static let endpoint = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -166,7 +170,10 @@ enum GroqClient {
                         text: prompt.isEmpty ? "Describe this image." : prompt,
                         image_url: nil)
         ]
-        for img in images {
+        // Batas model vision (qwen3.8-27b): maks 3 gambar per request.
+        // Pemanggil bisa menyerahkan lebih (mis. 1 video = 3 frame + foto) —
+        // potong di sini, satu choke point, supaya Groq tidak menolak 400.
+        for img in images.prefix(3) {
             let dataUrl = "data:\(img.mimeType);base64,\(img.data.base64EncodedString())"
             parts.append(ContentPart(type: "image_url", text: nil,
                                      image_url: ImageUrl(url: dataUrl)))

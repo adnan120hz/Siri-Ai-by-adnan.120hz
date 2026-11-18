@@ -22,6 +22,9 @@ struct ChatView: View {
 
     @State private var inputText = ""
     @State private var pendingImages: [Data] = []
+    /// Toggle "Cari di web" (Tavily grounding) — tersimpan antar sesi.
+    /// Kalau key Tavily belum ada, toggle tampil tapi nonaktif (lihat di bawah).
+    @AppStorage("webSearchEnabled") private var webSearchEnabled = false
     /// Waktu kirim terakhir: cegah double-tap membunuh request sendiri.
     @State private var lastSendStart = Date.distantPast
     @State private var showPlusMenu = false
@@ -149,6 +152,34 @@ struct ChatView: View {
                 }
             }
 
+
+            // Web search toggle (Tavily grounding). Tampil selalu; nonaktif
+            // + pesan jujur kalau key Tavily belum ada.
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                Text("Cari di web")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if SearchService.isConfigured {
+                    Toggle("", isOn: $webSearchEnabled)
+                        .labelsHidden()
+                } else {
+                    Text("butuh API key Tavily gratis")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .onTapGesture {
+                            alertText = "Web search needs a free Tavily API key — create one at tavily.com, then run scripts/generate_secrets.py and rebuild."
+                        }
+                    Toggle("", isOn: .constant(false))
+                        .labelsHidden()
+                        .disabled(true)
+                }
+            }
+            .padding(.horizontal, SiriTheme.m)
+            .padding(.vertical, 6)
 
             // Bottom bar.
             HStack(spacing: 10) {
@@ -418,7 +449,8 @@ struct ChatView: View {
             imageDatas: images.map { ($0, false) },
             fileImages: [],
             note: nil,
-            context: context, appState: appState
+            context: context, appState: appState,
+            webSearchEnabled: webSearchEnabled
         )
         inputText = ""
         pendingImages = []
@@ -612,6 +644,19 @@ struct MessageRow: View {
                                     .font(.body)
                                     .foregroundStyle(.primary)
                                     .textSelection(.enabled)
+                                // Sumber web (grounding Tavily), kalau ada.
+                                if let src = message.webSources, !src.isEmpty {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Sumber:")
+                                            .font(.caption.bold())
+                                            .foregroundStyle(.secondary)
+                                        Text(src)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .textSelection(.enabled)
+                                    }
+                                    .padding(.top, 4)
+                                }
                             }
                         }
                     }

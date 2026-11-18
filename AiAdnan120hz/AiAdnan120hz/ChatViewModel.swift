@@ -60,10 +60,14 @@ final class ChatViewModel: ObservableObject {
     /// Kirim pesan user + gambar. `imageDatas` = JPEG siap kirim (foto/video frames).
     /// `fileImages` = lampiran gambar (kini selalu kosong; dokumen premium hanya pdf/zip),
     /// sudah membawa mimeType aslinya — dikirim via `sendWithImages`.
+    /// `webSearchEnabled` = toggle "Cari di web" di ChatView. Grounding juga
+    /// jalan otomatis kalau pertanyaan terdeteksi butuh info terbaru — tapi
+    /// HANYA kalau key Tavily ada (tanpa key, diam-diam tanpa web).
     func send(conversation: Conversation, text: String,
               imageDatas: [(data: Data, isVideoFrame: Bool)],
               fileImages: [(data: Data, mimeType: String)] = [],
-              note: String?, context: ModelContext, appState: AppState) {
+              note: String?, context: ModelContext, appState: AppState,
+              webSearchEnabled: Bool = false) {
         // Recover stuck state: isSending true tapi tidak ada task berjalan
         // (mis. task mati sebelum reset). Tanpa ini, semua kirim gagal diam-diam.
         if isSending && sendTask == nil {
@@ -164,20 +168,45 @@ final class ChatViewModel: ObservableObject {
         let taskConversation = conversation
         let taskMemoryEnabled = appState.memoryEnabled
         let taskUsePremiumKey = Self.useEffectivePremiumKey
+        let taskWebSearchEnabled = webSearchEnabled
 
         sendTask = Task { @MainActor in
             do {
+                // WEB GROUNDING (Tavily): toggle ON, atau pertanyaan terdeteksi
+                // butuh info terbaru (tahun 2025/2026, "terbaru", "hari ini",
+                // dst.). Tanpa key Tavily = lewati diam-diam (toggle di UI
+                // sudah nonaktif). Gagal cari = jawab tanpa web, jangan bohong.
+                var groundedSystem = taskSystem
+                var sourcesText: String? = nil
+                let needsSearch = taskWebSearchEnabled
+                    || SearchService.needsFreshInfo(taskTrimmed)
+                if needsSearch && SearchService.isConfigured {
+                    do {
+                        let results = try await SearchService.search(taskTrimmed)
+                        if !results.isEmpty {
+                            let extracts = await SearchService.extractTopContents(
+                                results, query: taskTrimmed)
+                            groundedSystem += "\n\n" + SearchService.groundingContext(
+                                from: results, extracts: extracts)
+                            sourcesText = SearchService.sourcesText(from: results)
+                            print("[SiriAi] web grounding: \(results.count) sources")
+                        }
+                    } catch {
+                        print("[SiriAi] web search failed, answering without web: \(error.localizedDescription.prefix(120))")
+                    }
+                }
+
                 let full: String
                 let allImages = taskImageDatas.map { (data: $0.data, mimeType: "image/jpeg") }
                     + taskFileImages
                 if allImages.isEmpty {
                     full = try await GroqClient.sendText(
-                        taskTrimmed, history: taskHistory, systemInstruction: taskSystem,
+                        taskTrimmed, history: taskHistory, systemInstruction: groundedSystem,
                         usePremiumKey: taskUsePremiumKey)
                 } else {
                     full = try await GroqClient.sendWithImages(
                         taskTrimmed, images: allImages, history: taskHistory,
-                        systemInstruction: taskSystem, usePremiumKey: taskUsePremiumKey)
+                        systemInstruction: groundedSystem, usePremiumKey: taskUsePremiumKey)
                 }
                 print("[SiriAi] response OK (\(full.count) chars)")
                 // Estimasi token kasar untuk pelacak kuota lokal.
@@ -188,6 +217,7 @@ final class ChatViewModel: ObservableObject {
                 // Strip markdown bold markers (**) — tampil sebagai teks polos.
                 let clean = full.replacingOccurrences(of: "**", with: "")
                 taskAssistantMsg.text = clean
+                taskAssistantMsg.webSources = sourcesText
                 taskAssistantMsg.errorText = nil
                 self.streamingText = clean
                 try? context.save()
